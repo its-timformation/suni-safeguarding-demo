@@ -465,7 +465,7 @@ function go(h) { if (location.hash === h) route(); else location.hash = h; }
 /* topbar: on phones the logo shrinks to the flame, a Back button becomes an icon,
    and anything beyond two actions folds into a menu (admins also get their nav there) */
 function topbar(right = '', home = '#/') {
-  let back = ''; right = right.replace(/<a class="btn ghost sm[^"]*" href="[^"]*" data-back="[^"]*">[\s\S]*?<\/a>/, m => { back = m; return ''; });
+  let back = ''; right = right.replace(/<a class="btn ghost sm[^"]*" href="[^"]*" data-(?:back|up)="[^"]*">[\s\S]*?<\/a>/, m => { back = m; return ''; });
   const menu = (right.match(/class="btn /g) || []).length > 2 || right.includes('tb-nav');
   return `<div class="topbar ${menu ? 'hasmenu' : ''}"><div class="in">
     <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30).replace('alt="" aria-hidden="true"', 'alt="Scripture Union NI"')}</span><span class="brand-div"></span><span class="brand-lbl"><small class="brand-org">Scripture Union NI</small><b>Safeguarding Training</b></span></a>
@@ -807,7 +807,7 @@ function renderLearnerHome(person) {
         : st.key === 'locked' ? `<span class="small muted">We’ll be in touch to help</span>`
           : `<a class="btn red sm" href="#/me/p/${p.id}">${pct ? 'Continue' : rf ? (rf.kind === 'reset' ? 'Start again' : 'Renew now') : 'Start'} ${ICON.arrow}</a>`;
       const mins = estMinutes(p);
-      return `<article class="card pcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}" aria-labelledby="pc-${p.id}">
+      return `<article class="card pcard trcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}" aria-labelledby="pc-${p.id}">
         ${rf ? `<div class="rfband">${rf.kind === 'expired' ? ICON.info : REFRESH_SVG}<div><b>${rf.title}</b><span>${rf.text}</span></div></div>` : ''}
         <div class="pc-ring">${rf ? refreshRing(rf.kind, st.key === 'progress' ? pctDone(pr, p) : 0) : ring(pct, st.key === 'complete' ? 'var(--teal)' : p.colour)}</div>
         <div class="pc-head"><h3 id="pc-${p.id}">${esc(p.title)}</h3>${rf ? '' : chip(st)}</div>
@@ -846,7 +846,7 @@ function renderPlayer(person, pathway, stepParam) {
   if (isNaN(idx) || idx < 0) idx = firstOpen;
   const step = steps[idx];
   const kindLabel = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz', attest: 'Attestation' };
-  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me" data-back="#/me">${ICON.back} <span class="tb-txt">My training</span></a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
+  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me" data-up="#/me">${ICON.back} <span class="tb-txt">My training</span></a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
     <aside id="paside">
       <h2 class="ptitle">${esc(pathway.title)}</h2>
@@ -1391,6 +1391,7 @@ function renderVerify(certId, payload) {
 /* global delegated actions */
 document.addEventListener('click', e => {
   if (!e.target.closest('[data-act=more]')) document.querySelectorAll('.moremenu:not([hidden])').forEach(m => { m.hidden = true; m.previousElementSibling?.setAttribute('aria-expanded', 'false'); });
+  const up = e.target.closest('[data-up]'); if (up) { e.preventDefault(); go(up.dataset.up); return; }
   const bk = e.target.closest('[data-back]'); if (bk) { e.preventDefault(); appBack(bk.dataset.back); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act === 'worried') showWorried();

@@ -644,7 +644,7 @@ tr.sel td{background:#FFF7F5}
 @media(max-width:620px){.relmodes{grid-template-columns:1fr}.bulkbar{bottom:76px;padding:10px 12px}.uprow>.row{width:100%}}
 
 /* refresher states on the learner home */
-.pcard{flex-wrap:wrap}
+.trcard{flex-wrap:wrap}
 .pcard.needs-due{box-shadow:inset 4px 0 0 var(--amber),var(--sh-1)}
 .pcard.needs-expired,.pcard.needs-reset{box-shadow:inset 4px 0 0 var(--red),var(--sh-1)}
 .rfband{flex-basis:100%;display:flex;gap:10px;align-items:flex-start;border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:-4px}
@@ -917,8 +917,8 @@ p{line-height:1.6}
 .trainhead{margin:34px 0 16px;align-items:baseline}
 .pclist{display:grid;gap:20px}
 /* training card: ring | content, sections separated */
-.pcard{display:grid!important;grid-template-columns:68px minmax(0,1fr) auto;grid-template-areas:"band band band" "ring head cta" "ring desc cta" "ring meta cta";column-gap:22px;row-gap:0;align-items:start;padding:26px 28px}
-.pcard .rfband{grid-area:band;margin:0 0 20px}
+.trcard{display:grid!important;grid-template-columns:68px minmax(0,1fr) auto;grid-template-areas:"band band band" "ring head cta" "ring desc cta" "ring meta cta";column-gap:22px;row-gap:0;align-items:start;padding:26px 28px}
+.trcard .rfband{grid-area:band;margin:0 0 20px}
 .pc-ring{grid-area:ring}
 .pc-head{grid-area:head;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:34px}
 .pc-head h3{font-size:19px;margin:0}
@@ -928,23 +928,23 @@ p{line-height:1.6}
 .pc-k{font-family:var(--cond);text-transform:uppercase;letter-spacing:.06em;font-size:12.5px;font-weight:700;color:var(--muted);min-width:88px}
 .pc-meta li:not(:first-child){color:var(--ink-2)}
 .pc-ic{display:inline-flex;gap:4px;color:var(--muted)}.pc-ic svg{display:block}
-.pcard .pcta{grid-area:cta;align-self:center;flex-direction:column;align-items:stretch;gap:10px;min-width:190px}
-.pcard .pcta .btn{justify-content:center}
+.trcard .pcta{grid-area:cta;align-self:center;flex-direction:column;align-items:stretch;gap:10px;min-width:190px}
+.trcard .pcta .btn{justify-content:center}
 @media(max-width:820px){
-  .pcard{grid-template-columns:56px minmax(0,1fr);grid-template-areas:"band band" "ring head" "desc desc" "meta meta" "cta cta";column-gap:16px;padding:22px}
-  .pcard .ring,.pcard .rbadge{width:56px;height:56px}.pcard .ring svg{width:56px;height:56px}
-  .pcard .rbadge{border-width:6px}.pcard .rbadge svg{width:22px;height:22px}
+  .trcard{grid-template-columns:56px minmax(0,1fr);grid-template-areas:"band band" "ring head" "desc desc" "meta meta" "cta cta";column-gap:16px;padding:22px}
+  .trcard .ring,.trcard .rbadge{width:56px;height:56px}.trcard .ring svg{width:56px;height:56px}
+  .trcard .rbadge{border-width:6px}.trcard .rbadge svg{width:22px;height:22px}
   .pc-head{align-self:center;flex-direction:column;align-items:flex-start;gap:6px}
   .pc-desc{margin-top:16px}
-  .pcard .pcta{margin-top:20px;flex-direction:row;flex-wrap:wrap;min-width:0}
-  .pcard .pcta .btn{flex:1 1 auto}
+  .trcard .pcta{margin-top:20px;flex-direction:row;flex-wrap:wrap;min-width:0}
+  .trcard .pcta .btn{flex:1 1 auto}
 }
 @media(max-width:620px){
   .card{padding:20px}
-  .pcard{padding:20px}
+  .trcard{padding:20px}
   .trainhead{flex-direction:column;align-items:flex-start;gap:4px;margin-top:28px}
   .hero h1{font-size:30px;line-height:1.15}
-  .pcard .pcta{flex-direction:column}
+  .trcard .pcta{flex-direction:column}
 }
 
 /* header never overlaps: the brand shrinks, actions keep their size */
@@ -3796,7 +3796,7 @@ function go(h) { if (location.hash === h) route(); else location.hash = h; }
 /* topbar: on phones the logo shrinks to the flame, a Back button becomes an icon,
    and anything beyond two actions folds into a menu (admins also get their nav there) */
 function topbar(right = '', home = '#/') {
-  let back = ''; right = right.replace(/<a class="btn ghost sm[^"]*" href="[^"]*" data-back="[^"]*">[\s\S]*?<\/a>/, m => { back = m; return ''; });
+  let back = ''; right = right.replace(/<a class="btn ghost sm[^"]*" href="[^"]*" data-(?:back|up)="[^"]*">[\s\S]*?<\/a>/, m => { back = m; return ''; });
   const menu = (right.match(/class="btn /g) || []).length > 2 || right.includes('tb-nav');
   return `<div class="topbar ${menu ? 'hasmenu' : ''}"><div class="in">
     <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30).replace('alt="" aria-hidden="true"', 'alt="Scripture Union NI"')}</span><span class="brand-div"></span><span class="brand-lbl"><small class="brand-org">Scripture Union NI</small><b>Safeguarding Training</b></span></a>
@@ -4138,7 +4138,7 @@ function renderLearnerHome(person) {
         : st.key === 'locked' ? `<span class="small muted">We’ll be in touch to help</span>`
           : `<a class="btn red sm" href="#/me/p/${p.id}">${pct ? 'Continue' : rf ? (rf.kind === 'reset' ? 'Start again' : 'Renew now') : 'Start'} ${ICON.arrow}</a>`;
       const mins = estMinutes(p);
-      return `<article class="card pcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}" aria-labelledby="pc-${p.id}">
+      return `<article class="card pcard trcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}" aria-labelledby="pc-${p.id}">
         ${rf ? `<div class="rfband">${rf.kind === 'expired' ? ICON.info : REFRESH_SVG}<div><b>${rf.title}</b><span>${rf.text}</span></div></div>` : ''}
         <div class="pc-ring">${rf ? refreshRing(rf.kind, st.key === 'progress' ? pctDone(pr, p) : 0) : ring(pct, st.key === 'complete' ? 'var(--teal)' : p.colour)}</div>
         <div class="pc-head"><h3 id="pc-${p.id}">${esc(p.title)}</h3>${rf ? '' : chip(st)}</div>
@@ -4177,7 +4177,7 @@ function renderPlayer(person, pathway, stepParam) {
   if (isNaN(idx) || idx < 0) idx = firstOpen;
   const step = steps[idx];
   const kindLabel = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz', attest: 'Attestation' };
-  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me" data-back="#/me">${ICON.back} <span class="tb-txt">My training</span></a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
+  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me" data-up="#/me">${ICON.back} <span class="tb-txt">My training</span></a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
     <aside id="paside">
       <h2 class="ptitle">${esc(pathway.title)}</h2>
@@ -4722,6 +4722,7 @@ function renderVerify(certId, payload) {
 /* global delegated actions */
 document.addEventListener('click', e => {
   if (!e.target.closest('[data-act=more]')) document.querySelectorAll('.moremenu:not([hidden])').forEach(m => { m.hidden = true; m.previousElementSibling?.setAttribute('aria-expanded', 'false'); });
+  const up = e.target.closest('[data-up]'); if (up) { e.preventDefault(); go(up.dataset.up); return; }
   const bk = e.target.closest('[data-back]'); if (bk) { e.preventDefault(); appBack(bk.dataset.back); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act === 'worried') showWorried();
