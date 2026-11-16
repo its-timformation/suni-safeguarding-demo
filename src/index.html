@@ -991,6 +991,36 @@ fieldset.field{border:0;padding:0;margin:0 0 16px}fieldset.field legend{padding:
 .wl-steps li b::before{content:counter(s) ". ";color:var(--teal)}
 .wl-steps span{font-size:14.5px;color:var(--ink-2);line-height:1.5}
 @media(max-width:700px){.wl-steps{grid-template-columns:1fr}}
+
+/* launch */
+.lnbanner{border-color:var(--red)!important;background:#FFFBFA}
+.lnsteps{display:grid;gap:12px}
+.lnstep{background:var(--card,#fff);border-radius:18px;box-shadow:var(--sh-1);overflow:hidden}
+.lnstep.open{box-shadow:0 0 0 2px var(--red),var(--sh-1)}
+.lnhead{display:flex;align-items:center;gap:16px;width:100%;border:0;background:none;padding:18px 20px;text-align:left;font:inherit;color:inherit;cursor:pointer;min-height:64px}
+.lnnum{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:#F1EDE8;color:var(--ink-2);flex:none}
+.lnstep.done .lnnum{background:var(--teal);color:#fff}.lnnum svg{width:18px;height:18px}
+.lntext{flex:1;display:grid;gap:2px;min-width:0}.lntext b{font-size:16px}.lntext span{font-size:14px;color:var(--muted)}
+.lnchev{color:var(--muted);transition:transform .15s;flex:none}.lnstep.open .lnchev{transform:rotate(180deg)}
+.lnbody{padding:4px 20px 22px 70px}
+.lnopts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.lnopt{display:grid;gap:4px;text-align:left;border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;background:#fff;font:inherit;color:inherit;cursor:pointer;text-decoration:none}
+.lnopt:hover{border-color:var(--red);text-decoration:none}.lnopt span{font-size:13.5px;color:var(--muted);line-height:1.45}
+.rolematrix td,.rolematrix th{text-align:center}.rolematrix th[scope=row],.rolematrix th:first-child{text-align:left}.rolematrix .num{font-variant-numeric:tabular-nums;color:var(--muted)}
+.ln-prev{max-height:520px;overflow:auto;border-radius:14px}
+.ln-sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.ln-sum>div{border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:2px}.ln-sum b{font-size:20px;font-weight:800}.ln-sum span{font-size:13px;color:var(--muted)}
+.lnfunnel{margin-bottom:20px}
+.funnel{display:grid;gap:10px}
+.fn-row{display:grid;grid-template-columns:140px minmax(0,1fr) 120px;gap:12px;align-items:center}
+.fn-l{font-weight:600;font-size:14.5px}.fn-bar{height:14px;background:#F1EDE8;border-radius:8px;overflow:hidden}.fn-bar i{display:block;height:100%;border-radius:8px}
+.fn-n{font-size:14px;font-variant-numeric:tabular-nums}
+.maptable td,.maptable th{vertical-align:middle}.maptable select{min-width:170px}
+.wl-name{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;background:#fff;border-radius:12px;font-size:14.5px}
+.wl-name.editing{display:grid;grid-template-columns:1fr 1fr auto;align-items:end}
+@media(max-width:820px){.lnopts,.ln-sum{grid-template-columns:1fr 1fr}.lnbody{padding-left:20px}}
+@media(max-width:620px){.lnopts,.ln-sum{grid-template-columns:1fr}.fn-row{grid-template-columns:1fr auto}.fn-bar{grid-column:1/-1;grid-row:2}.wl-name.editing{grid-template-columns:1fr}
+  #toasts{bottom:auto;top:76px}}
 </style>
 </head>
 <body>

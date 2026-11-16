@@ -47,6 +47,7 @@ const ICON = {
   path: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6H15a3.5 3.5 0 0 1 0 7H9a3.5 3.5 0 0 0 0 7h6.5"/></svg>',
   mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg>',
   shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+  flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg>',
   log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>',
   cog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   link: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg>',
@@ -168,6 +169,8 @@ function verLabel(pw, n) {
 }
 const vTag = (pw, n) => 'v' + verLabel(pw, n);
 function nextLabel(pw, kind) { const [M, m] = verLabel(pw).split('.').map(Number); return pw.version ? (kind === 'major' ? `${M + 1}.0` : `${M}.${(m || 0) + 1}`) : '1.0'; }
+const estMinutes = pw => Math.max(10, pw.steps.length * 5);
+const estTotal = pws => pws.reduce((n, pw) => n + estMinutes(pw), 0);
 function latestCompletion(personId, pathwayId) {
   const st = db.completions.length + ':' + persistCount;
   if (_cStamp !== st) { _cIdx = new Map(); for (const c of db.completions) { if (c.revoked) continue; const k = c.personId + '|' + c.pathwayId, cur = _cIdx.get(k); if (!cur || c.completedAt > cur.completedAt) _cIdx.set(k, c); } _cStamp = st; }
@@ -439,7 +442,7 @@ function route() {
   const restore = navBack ? scrollMem[cur] || 0 : 0; requestAnimationFrame(() => window.scrollTo({ top: restore }));
   if (parts[0] === 'i') { const p = db.people.find(x => x.token === parts[1]); loginPrefill = p ? p.email : ''; return replaceHash('#/login'); }
   if (parts[0] === 'login') return renderLogin();
-  if (parts[0] === 'auth') return renderAuth(parts[1]);
+  if (parts[0] === 'auth' || parts[0] === 'start') return renderAuth(parts[1]);
   if (parts[0] === 'me') return learnerRoute(parts.slice(1));
   if (parts[0] === 'preview') return previewAs(parts[1]);
   if (parts[0] === 'verify') return renderVerify(parts[1], parts[2]);
@@ -663,17 +666,28 @@ function simulatedInbox(p, link) {
 }
 function renderAuth(token) {
   const link = (db.magicLinks || []).find(l => l.token === token); const p = link && Person(link.volunteer_id);
+  const start = link?.kind === 'start';
+  // already signed in as this person (e.g. tapping the invite button again): just carry on
+  if (p && Session.get('vol')?.volunteer_id === p.id && !p.archived) return replaceHash('#/me');
+  if (p) loginPrefill = p.email;
   const fail = (title, msg) => { app().innerHTML = topbar() + `<main class="wrap fadein"><div class="login"><div class="card pad-lg login-card" style="text-align:center">
       <div class="vbadge" style="--tone:var(--amber);background:var(--amber);margin:0 auto 14px">${ICON.info.replace('<svg', '<svg width="40" height="40"')}</div>
       <h1 style="font-size:28px;margin-bottom:8px">${title}</h1><p class="muted">${msg}</p><a class="btn red lg" href="#/login" style="margin-top:10px">Send me a new link</a></div></div></main>` + demobar('learner'); };
   if (!link || !p) return fail('This sign-in link isn’t valid', 'It may have been mistyped. Ask for a new link and use the latest email.');
   if (link.used_at) return fail('This link has already been used', 'For your security each sign-in link works once. Ask for a new one to sign in again.');
-  if (new Date(link.expires_at) < new Date()) return fail('This link has expired', `Sign-in links only last ${LINK_MINUTES} minutes. Ask for a new one — it only takes a moment.`);
+  if (new Date(link.expires_at) < new Date()) return fail('This link has expired', start ? `Invite links last ${inviteDays()} days. Ask for a sign-in link below — it only takes a moment.` : `Sign-in links only last ${LINK_MINUTES} minutes. Ask for a new one — it only takes a moment.`);
   if (p.archived) return fail('You can’t sign in right now', 'Your volunteer record is archived. Please contact SUNI if you’re serving again.');
   link.used_at = now();
   Session.set('vol', { volunteer_id: p.id, at: now() });
-  audit({ personId: p.id, actor: 'learner', action: 'login', detail: { method: 'magic_link' } });
-  toast(`Signed in — welcome, ${firstName(p.name)}`); replaceHash('#/me');
+  audit({ personId: p.id, actor: 'learner', action: 'login', detail: { method: start ? 'invite_link' : 'magic_link' } });
+  replaceHash('#/me');
+}
+/* invite emails carry a personal start link: one use, valid for inviteDays (default 7) */
+const inviteDays = () => db.settings.inviteDays || 7;
+function createStartLink(p) {
+  db.magicLinks ||= [];
+  const link = { token: 'st-' + uid('') + Math.random().toString(36).slice(2, 10), volunteer_id: p.id, kind: 'start', created_at: now(), expires_at: new Date(Date.now() + inviteDays() * DAY).toISOString(), used_at: null };
+  db.magicLinks.push(link); return link.token;
 }
 const ADMIN_DEMO = { email: 'admin@suni.demo', pass: 'safeguarding' };
 function renderAdminLogin() {
@@ -770,12 +784,13 @@ function renderLearnerHome(person) {
     ${firstVisit ? `<section class="welcome card" aria-labelledby="wl-h"><div class="wl-head"><h2 id="wl-h">Welcome to SUNI safeguarding training</h2><button class="iconbtn" id="wl-x" aria-label="Close welcome">${ICON.x}</button></div>
       <p>Thanks for serving with us. Here's what to expect:</p>
       <ol class="wl-steps"><li><b>Watch</b><span>a short video, at your own pace. You can pause and come back.</span></li><li><b>Check</b><span>a 5-question quiz. You need 80%, and you can try again.</span></li><li><b>Sign off</b><span>read our guidance and confirm you'll follow it. Your certificate appears straight away.</span></li></ol>
-      <p class="small muted" style="margin:0">About ${Math.max(10, req.length * 15)} minutes in total. Next time, just enter your email on the sign-in page and we'll send you a link. Questions? Reply to any of our emails or contact ${esc(db.settings.dsoName || 'our safeguarding team')}.</p>
+      <p class="small muted" style="margin:0">About ${estTotal(req)} minutes in total. Next time, just enter your email on the sign-in page and we'll send you a link. Questions? Reply to any of our emails${db.settings.dsoEmail ? ` or contact ${esc(db.settings.dsoName && db.settings.dsoName !== 'Designated Safeguarding Officer' ? db.settings.dsoName : 'our safeguarding team')} at ${esc(db.settings.dsoEmail)}` : ''}.</p>
+      <div class="wl-name" id="wl-name"><span>Your name on certificates: <b id="wl-nm">${esc(person.name)}</b></span><button class="btn ghost xs" id="wl-fix">Not right? Change it</button></div>
       <div class="row" style="gap:8px;margin-top:16px"><a class="btn red" href="#/me/p/${req.find(pw => statusOf(person, pw).key === 'none')?.id}">Start my training ${ICON.arrow}</a><button class="btn ghost" id="wl-later">I'll look around first</button></div></section>` : ''}
     <div class="hero" style="margin-bottom:26px">
       <div class="flamebg">${FLAME(170)}</div>
       <h1 style="margin:8px 0 10px">${allDone ? `Thank you, ${esc(firstName(person.name))} — you’re all set.` : `Hi ${esc(firstName(person.name))}, thanks for serving with us.`}</h1>
-      <p class="muted" style="max-width:62ch;font-size:17px">${allDone ? 'Your training is up to date. You can download your certificates below at any time.' : `Before you serve${evs.length ? ` at <b>${evs.map(e => esc(e.name)).join('</b> and <b>')}</b>` : ''}, please complete the training below. It takes about ${Math.max(10, req.length * 15)} minutes, and you can stop and pick up where you left off.`}</p>
+      <p class="muted" style="max-width:62ch;font-size:17px">${allDone ? 'Your training is up to date. You can download your certificates below at any time.' : `Before you serve${evs.length ? ` at <b>${evs.map(e => esc(e.name)).join('</b> and <b>')}</b>` : ''}, please complete the training below. It takes about ${estTotal(req)} minutes, and you can stop and pick up where you left off.`}</p>
       <div class="row" style="margin-top:14px">${evs.map(e => `<span class="tag">${ICON.cal.replace('<svg', '<svg width="13" height="13" style="vertical-align:-2px"')} ${esc(e.name)} · ${fmtDate(e.date)}</span>`).join('')}</div>
     </div>
     ${(() => { const rn = evs.filter(e => eventState(person, e) === 'renew'); if (!rn.length) return '';
@@ -791,7 +806,7 @@ function renderLearnerHome(person) {
       const cta = st.key === 'complete' || st.key === 'due' ? (st.key === 'due' ? `<a class="btn red sm" href="#/me/p/${p.id}">${REFRESH_SVG.replace('<svg', '<svg width="16" height="16"')} Refresh now</a> ` : '') + `<a class="btn ghost sm" href="#/me/cert/${st.c.id}">${st.key === 'due' ? 'Current certificate' : 'View certificate'}</a>`
         : st.key === 'locked' ? `<span class="small muted">We’ll be in touch to help</span>`
           : `<a class="btn red sm" href="#/me/p/${p.id}">${pct ? 'Continue' : rf ? (rf.kind === 'reset' ? 'Start again' : 'Renew now') : 'Start'} ${ICON.arrow}</a>`;
-      const mins = Math.max(10, p.steps.length * 5);
+      const mins = estMinutes(p);
       return `<article class="card pcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}" aria-labelledby="pc-${p.id}">
         ${rf ? `<div class="rfband">${rf.kind === 'expired' ? ICON.info : REFRESH_SVG}<div><b>${rf.title}</b><span>${rf.text}</span></div></div>` : ''}
         <div class="pc-ring">${rf ? refreshRing(rf.kind, st.key === 'progress' ? pctDone(pr, p) : 0) : ring(pct, st.key === 'complete' ? 'var(--teal)' : p.colour)}</div>
@@ -808,6 +823,12 @@ function renderLearnerHome(person) {
     ${person.eventIds.length === 0 && !req.length ? '' : `<p class="small muted" style="margin-top:22px">Your answers and completion are recorded so ${esc(db.settings.short)} can show that everyone serving has been trained. See the <a href="https://www.suni.co.uk" target="_blank" rel="noopener">Privacy Notice</a>.</p>`}
   </main>` + worriedFab() + demobar('learner');
   const dismiss = () => { db.welcomed[person.id] = now(); persist(); };
+  $('#wl-fix') && ($('#wl-fix').onclick = () => { const box = $('#wl-name');
+    box.innerHTML = `<label class="f" for="wl-first" style="grid-column:1/-1;margin:0">Your name as it should appear on certificates</label><input class="input" id="wl-first" value="${esc(person.first_name)}" aria-label="First name" autocomplete="given-name"><input class="input" id="wl-last" value="${esc(person.last_name)}" aria-label="Last name" autocomplete="family-name"><button class="btn red sm" id="wl-save">Save</button>`;
+    box.classList.add('editing'); $('#wl-first').focus();
+    $('#wl-save').onclick = () => { const f = $('#wl-first').value.trim(), l = $('#wl-last').value.trim(); if (!f || !l) { toast('Add your first and last name'); return; }
+      const before = person.name; setName(person, f, l); audit({ personId: person.id, actor: 'learner', action: 'volunteer_updated', detail: { name: person.name, changes: [`name: ${before} → ${person.name}`], source: 'Volunteer, first visit' } }); persist();
+      toast('Name saved'); route(); }; });
   $('#wl-x') && ($('#wl-x').onclick = () => { dismiss(); $('.welcome').remove(); });
   $('#wl-later') && ($('#wl-later').onclick = () => { dismiss(); $('.welcome').remove(); });
   $('.welcome .btn.red') && $('.welcome .btn.red').addEventListener('click', dismiss);

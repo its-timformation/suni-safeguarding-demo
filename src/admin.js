@@ -2,7 +2,7 @@
    ADMIN
    ===================================================================== */
 const NAV = [
-  ['', 'Overview', 'grid'], ['people', 'People', 'people'], ['events', 'Events', 'cal'],
+  ['', 'Overview', 'grid'], ['launch', 'Launch', 'flag'], ['people', 'People', 'people'], ['events', 'Events', 'cal'],
   ['pathways', 'Pathways', 'path'], ['emails', 'Emails', 'mail'], ['audit', 'Audit log', 'log'], ['privacy', 'Data & privacy', 'shield'], ['settings', 'Settings', 'cog'],
 ];
 function adminShell(active, inner) {
@@ -27,6 +27,7 @@ function adminRoute(parts) {
   if (sec === 'audit') return renderAudit();
   if (sec === 'settings') return renderSettings();
   if (sec === 'privacy') return renderPrivacy();
+  if (sec === 'launch') return renderLaunch();
   if (sec === 'cert' && id) return renderCert(id, null);
   renderOverview();
 }
@@ -56,6 +57,8 @@ const avatar = p => `<span class="avatar" style="background:${avatarColour(p.nam
 /* ---------- overview ---------- */
 let matrixFilter = { q: '', event: '', role: '', status: '' }, matrixShown = 25;
 const PF0 = { q: '', event: '', role: '', status: '', ready: '', pathway: '' }; let peopleFilter = { ...PF0 }, peopleShown = 40, peoplePage = 1; const PAGE = 25;
+function launchBanner() { if (launchedYet()) return ''; const st = launchSteps(), d = st.filter(x => x.done).length;
+  return `<a class="card rocard lnbanner" href="#/admin/launch"><div><b>Get ready to launch · ${d} of ${st.length} steps done</b><span class="small muted">Next: ${esc(st.find(x => !x.done)?.t || 'launch')}</span></div>${ICON.arrow}</a>`; }
 function renderOverview() {
   const N = live().length;
   const per = live().map(p => { const req = requiredPathwaysFor(p); return { p, req, sts: req.map(pw => ({ pw, st: statusOf(p, pw) })) }; });
@@ -101,6 +104,7 @@ function renderOverview() {
       <div class="card"><div class="row between" style="margin-bottom:6px"><h3>Recent activity</h3><a class="small" href="#/admin/audit">Audit log</a></div>${activityList(db.audit.slice(-10).reverse())}</div>
     </div>`);
   bindPf(); bindExports(); $("#xaudrep") && ($("#xaudrep").onclick = exportAuditReport);
+  if (!launchedYet()) $('#adm .pagehead')?.insertAdjacentHTML('afterend', launchBanner());
   $$('[data-kremind]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const k = b.dataset.kremind; const ppl = live().filter(p => requiredPathwaysFor(p).some(pw => statusOf(p, pw).key === k));
     composeEmail(ppl, { title: k === 'expired' ? 'Remind everyone whose training has expired' : 'Remind everyone due soon', ruleId: k === 'expired' ? 'r-expired' : 'r-expiring', ctxFor: p => { const x = requiredPathwaysFor(p).map(pw => ({ pw, st: statusOf(p, pw) })).find(y => y.st.key === k); return { training: x?.pw.title, expiry: x?.st.c?.expiresAt, daysLeft: x?.st.c ? Math.ceil((new Date(x.st.c.expiresAt) - Date.now()) / DAY) : '' }; } }); });
 }
@@ -127,6 +131,8 @@ function auditText(a) {
     case 'rollout_wave': return `Rollout batch sent <span class="muted">· ${d.count} invites${d.simulated ? ' (simulated day ' + esc(d.day) + ')' : ''} · ${d.left} to go · ${d.plan} plan</span>`;
     case 'rollout_started': return `Admin started a rollout <span class="muted">· ${d.people} people from ${esc(d.start)}, ${d.perDay} a day on the ${d.plan} plan</span>`;
     case 'rollout_paused': case 'rollout_resumed': case 'rollout_cancelled': return `Admin ${a.action.split('_')[1]} the rollout`;
+    case 'invites_nudged': return `Nudge emails sent <span class="muted">· ${d.count} people who hadn't signed in</span>`;
+    case 'pathway_roles_changed': return `Admin ${d.required ? 'required' : 'removed'} <b>${esc(pw)}</b> for the role ${esc(d.role)}`;
     case 'volunteer_archived': return `Admin archived <b>${esc(d.name || who)}</b>${d.reason ? ` <span class="muted">· ${esc(d.reason)}</span>` : ''}`;
     case 'volunteer_reactivated': return `<b>${esc(d.name || who)}</b> reactivated <span class="muted">· ${esc(d.source || 'admin')} · ${d.records_kept} record${d.records_kept === 1 ? '' : 's'} kept${d.records_removed ? `, ${d.records_removed} over ${retentionYears()} years old removed` : ''}</span>`;
     case 'volunteer_deleted': return `${a.actor === 'system' ? 'Automatic cleanup' : 'Admin'} permanently deleted a volunteer <span class="muted">· ref ${esc(d.ref)} · ${d.records_deleted} records and ${d.audit_entries_deleted} audit entries erased · ${esc(d.reason || '')}</span>`;
@@ -1157,11 +1163,13 @@ function mergeText(t, p, ctx = {}) {
   const v = { first_name: firstName(p.name), name: p.name, training: ctx.training || requiredPathwaysFor(p).map(x => x.title).join(' and ') || 'your safeguarding training', expiry_date: ctx.expiry ? fmtDate(ctx.expiry) : '', days_left: ctx.daysLeft ?? '', event: ctx.event?.name || p.eventIds.map(id => EventById(id)?.name).filter(Boolean)[0] || 'SUNI', event_date: ctx.event ? fmtDate(ctx.event.date) : '', link: trainLink(p), dso_name: db.settings.dsoName || 'our safeguarding team' };
   return String(t).replace(/\{(\w+)\}/g, (m, k) => v[k] ?? m);
 }
-function emailHTML(subject, body, p) {
+function emailHTML(subject, body, p, m = null) {
+  const start = m?.start, href = start ? (publicBase() || location.href.split('#')[0]) + '#/start/' + start : trainLink(p);
+  const exp = start && (db.magicLinks || []).find(l => l.token === start)?.expires_at;
   const paras = esc(body).split(/\n\n+/).map(x => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('');
   return `<div class="em"><div class="em-head">${LOGO(34)}</div><div class="em-bar"></div><div class="em-body"><h2>${esc(subject)}</h2>${paras}
-    <a class="em-btn" href="${esc(trainLink(p))}" target="_blank" rel="noopener">Go to my training</a>
-    <p class="em-small">Or copy this link: ${esc(trainLink(p))}</p></div>
+    <a class="em-btn" href="${esc(href)}" ${start ? '' : 'target="_blank" rel="noopener"'}>${start ? 'Start my training' : 'Go to my training'}</a>
+    <p class="em-small">${start ? `This button signs you in — no password needed. It works once and lasts until ${fmtDate(exp)}; after that, use “Email me a sign-in link” on the sign-in page.` : `Or copy this link: ${esc(trainLink(p))}`}</p></div>
     <div class="em-foot">Scripture Union Northern Ireland · Charity NIC104852<br>You’re getting this because you’re serving with SUNI. Questions? Just reply.</div></div>`;
 }
 /* who is due each automatic reminder right now */
@@ -1190,7 +1198,7 @@ function sendEmails(items, { subject, body, source, ruleId = null, at = null, ro
     setTimeout(() => toast(`${later.length} email${later.length === 1 ? '' : 's'} held until tomorrow to stay within today's free allowance`), 400); } }
   items.forEach(({ p, ctx = {}, key }) => {
     const sj = mergeText(subject, p, ctx), bd = mergeText(body, p, ctx);
-    db.outbox.push({ id: uid('m_'), at, to: p.email, personId: p.id, subject: sj, body: bd, source, ruleId, key: key || null, by: source === 'automatic' ? 'system' : db.settings.adminName });
+    db.outbox.push({ id: uid('m_'), at, to: p.email, personId: p.id, subject: sj, body: bd, source, ruleId, key: key || null, start: createStartLink(p), by: source === 'automatic' ? 'system' : db.settings.adminName });
     db.audit.push({ id: uid('a_'), at, personId: p.id, actor: source === 'automatic' ? 'system' : 'admin', action: 'email_sent', detail: { name: p.name, subject: sj, source, rule: ruleId && RULE(ruleId)?.name } });
   });
   persist(); if (items.length && !rollout) mailPop(db.outbox.slice(-items.length)); return items.length;
@@ -1219,7 +1227,7 @@ function renderInbox(token, mid) {
   app().innerHTML = `<div class="inbox"><header class="ib-top"><div class="row" style="gap:12px">${ICON.mail.replace('<svg', '<svg width="22" height="22"')}<b>Inbox</b><span class="muted small">${esc(p.email)}</span></div>
       <div class="row" style="gap:8px"><span class="tag" style="background:var(--amber-50)">Demo inbox — not a real mailbox</span><a class="btn ghost sm" href="${isAdmin() ? '#/admin/people/' + p.id : '#/me'}" data-back="${isAdmin() ? '#/admin/people/' + p.id : '#/me'}">${ICON.back} Back</a></div></header>
     <div class="ib-body"><aside class="ib-list">${mails.map(m => `<a class="ib-item ${cur && m.id === cur.id ? 'on' : ''} ${read[m.id] ? '' : 'unread'}" href="#/inbox/${p.token}/${m.id}"><div class="row between"><b>Scripture Union NI</b><span class="tiny muted">${fmtDate(m.at)}</span></div><div class="ib-sub">${esc(m.subject)}</div><div class="ib-snip">${esc(m.body.replace(/\s+/g, ' ').slice(0, 90))}…</div></a>`).join('') || '<div class="empty">No emails yet.<br><span class="small">Send a reminder from the admin area to see one arrive.</span></div>'}</aside>
-      <main class="ib-read">${cur ? `<div class="ib-meta"><h2>${esc(cur.subject)}</h2><div class="small muted">From <b>Scripture Union NI</b> &lt;training@suni.co.uk&gt; · to ${esc(p.name)} · ${fmtDT(cur.at)}</div></div>${emailHTML(cur.subject, cur.body, p)}` : ''}</main></div></div>` + demobar('');
+      <main class="ib-read">${cur ? `<div class="ib-meta"><h2>${esc(cur.subject)}</h2><div class="small muted">From <b>Scripture Union NI</b> &lt;training@suni.co.uk&gt; · to ${esc(p.name)} · ${fmtDT(cur.at)}</div></div>${emailHTML(cur.subject, cur.body, p, cur)}` : ''}</main></div></div>` + demobar('');
   const btn = $('.ib-read .em-btn'); if (btn) { btn.removeAttribute('target'); btn.setAttribute('href', '#/i/' + p.token); }
 }
 /* fire an event-based rule straight away (called from actions around the app) */
@@ -1302,7 +1310,7 @@ function composeEmail(people, { title = 'Email people', ruleId = '', ctxFor = ()
 function viewEmail(m) {
   const p = Person(m.personId) || { name: m.to, token: '' };
   modal(`<header><div><div class="eyebrow">${m.source === 'automatic' ? 'Automatic · ' + esc(RULE(m.ruleId)?.name || '') : m.source === 'ad-hoc' ? 'Ad-hoc email' : 'Sent by ' + esc(m.by)}</div><h2 style="margin-top:4px">${esc(m.subject)}</h2><div class="small muted">To ${esc(p.name)} &lt;${esc(m.to)}&gt; · ${fmtDT(m.at)}</div></div><button class="iconbtn" data-close>${ICON.x}</button></header>
-    <div class="body">${emailHTML(m.subject, m.body, p)}</div><footer><button class="btn ghost" data-close>Close</button></footer>`, 'wide');
+    <div class="body">${emailHTML(m.subject, m.body, p, m)}</div><footer><button class="btn ghost" data-close>Close</button></footer>`, 'wide');
 }
 let outboxShown = 30, outboxQ = '';
 function renderEmails() {
@@ -1531,8 +1539,8 @@ function previewImport(text, fname) {
   $('#imback').onclick = () => { closeModal(); importPeople(); };
   $('#imgo').onclick = () => {
     const react = new Set($$('[data-re]:checked').map(c => c.dataset.re)); let created = 0, updated = 0, reactivated = 0;
-    a.create.forEach(r => { const p = setName({ id: uid('u_'), token: uid('inv-'), createdAt: now(), email: r.o.email, type: 'volunteer', roles: r.roles, eventIds: r.eventIds, org: '', notes: '', accessNI: { status: 'not_requested', date: '' } }, r.o.first_name, r.o.last_name);
-      db.people.push(p); created++; audit({ actor: 'admin', action: 'volunteer_created', personId: p.id, detail: { name: p.name, source: 'CSV import' } }); if (requiredPathwaysFor(p).length) autoEmail('assigned', p, { key: 'import' }); });
+    a.create.forEach(r => { const p = setName({ id: uid('u_'), token: uid('inv-'), createdAt: now(), email: r.o.email, type: ['staff', 'other'].includes(r.o.type) ? r.o.type : 'volunteer', roles: r.roles, eventIds: r.eventIds, org: '', notes: '', accessNI: { status: 'not_requested', date: '' } }, r.o.first_name, r.o.last_name);
+      db.people.push(p); created++; audit({ actor: 'admin', action: 'volunteer_created', personId: p.id, detail: { name: p.name, source: 'CSV import' } }); if (requiredPathwaysFor(p).length && launchedYet()) autoEmail('assigned', p, { key: 'import' }); });
     const upd = r => { const before = r.ex.name; setName(r.ex, r.o.first_name, r.o.last_name); if (r.roles.length) r.ex.roles = r.roles; r.eventIds.forEach(id => r.ex.eventIds.includes(id) || r.ex.eventIds.push(id));
       audit({ actor: 'admin', action: 'volunteer_updated', personId: r.ex.id, detail: { name: r.ex.name, changes: before !== r.ex.name ? [`name: ${before} → ${r.ex.name}`] : ['roles/events'], source: 'CSV import' } }); };
     a.update.forEach(r => { upd(r); updated++; });
@@ -2107,8 +2115,195 @@ function renderRollout() {
   $('#ro-sim') && ($('#ro-sim').onclick = () => sim(1)); $('#ro-sim5') && ($('#ro-sim5').onclick = () => sim(5));
 }
 
+/* =====================================================================
+   LAUNCH: load everyone, check training, prepare the invite, schedule,
+   then track responses and chase people who haven't started
+   ===================================================================== */
+const LAUNCH = () => (db.launch ||= { chase: { on: true, days: 5, max: 2 } });
+function chaseRule() { let r = RULE('r-chase'); if (!r) { r = { id: 'r-chase', kind: 'event', trigger: 'chase', name: 'Invite nudge', enabled: true, when: 'Days after an invite, if they haven’t signed in yet', subject: 'A reminder: your safeguarding training for {event}', body: 'Hi {first_name},\n\nJust a friendly nudge — we sent you a link to your safeguarding training a few days ago and you haven’t had a chance to start yet.\n\nIt takes about 30 minutes and you can do it on your phone. Tap the button below to begin — no password needed.\n\nThanks for serving with us!\nThe SUNI team' }; db.emailRules.push(r); } return r; }
+const invitedAt = () => { const m = new Map(); (db.outbox || []).forEach(x => { if ((x.key || '').startsWith('rollout|') || x.ruleId === 'r-assigned') { if (!m.has(x.personId) || m.get(x.personId) < x.at) m.set(x.personId, x.at); } }); return m; };
+const signedInSet = () => new Set(db.audit.filter(a => a.action === 'login' && a.personId).map(a => a.personId));
+function launchFunnel() {
+  const inv = invitedAt(), si = signedInSet(); const ids = [...inv.keys()].filter(id => Person(id) && !Person(id).archived);
+  const started = ids.filter(id => db.completions.some(c => c.personId === id) || Object.values(db.progress[id] || {}).some(pr => Object.keys(pr.steps || {}).length));
+  const done = ids.filter(id => { const p = Person(id); const req = requiredPathwaysFor(p); return req.length && req.every(pw => ['complete', 'due'].includes(statusOf(p, pw).key)); });
+  const waiting = ids.filter(id => !si.has(id) && !started.includes(id));
+  return { invited: ids.length, signedIn: ids.filter(id => si.has(id) || started.includes(id)).length, started: started.length, done: done.length, waiting, inv };
+}
+function nudgesFor(id) { return (db.outbox || []).filter(m => m.personId === id && m.ruleId === 'r-chase').length; }
+function processChasers(force = false) {
+  const L = LAUNCH(); if (!L.chase.on && !force) return 0; const f = launchFunnel(), rule = chaseRule(); const due = [];
+  f.waiting.forEach(id => { const n = nudgesFor(id); if (n >= L.chase.max) return; const last = [f.inv.get(id), ...(db.outbox || []).filter(m => m.personId === id && m.ruleId === 'r-chase').map(m => m.at)].sort().at(-1);
+    if (force || Date.now() - Date.parse(last) >= L.chase.days * DAY) due.push({ p: Person(id), ctx: assignedCtx(Person(id)) || {}, key: `chase|${id}|${n + 1}` }); });
+  if (!due.length) return 0;
+  const sent = sendEmails(due, { subject: rule.subject, body: rule.body, source: 'automatic', ruleId: rule.id });
+  audit({ actor: 'system', action: 'invites_nudged', detail: { count: sent } }); return sent;
+}
+
+/* ---------- step 2 helper: import any spreadsheet by mapping its columns ---------- */
+const MAP_FIELDS = [['', 'Ignore'], ['first_name', 'First name'], ['last_name', 'Last name'], ['full_name', 'Full name'], ['email', 'Email'], ['type', 'Staff / volunteer'], ['roles', 'Role(s)'], ['events', 'Event(s)']];
+function guessField(h) { h = h.toLowerCase().replace(/[^a-z]/g, '');
+  if (/^(first|firstname|forename|givenname|christianname)$/.test(h)) return 'first_name';
+  if (/^(last|lastname|surname|familyname)$/.test(h)) return 'last_name';
+  if (/^(name|fullname|volunteername|volunteer)$/.test(h)) return 'full_name';
+  if (/email|e?mailaddress/.test(h)) return 'email';
+  if (/^(type|stafforvolunteer|category|status)$/.test(h)) return 'type';
+  if (/role|position|team/.test(h)) return 'roles';
+  if (/event|camp|mission|group/.test(h)) return 'events';
+  return ''; }
+function sampleLoadSheet() {
+  const first = ['Aoife', 'Ciaran', 'Ruth', 'Mark', 'Emma', 'Jonny', 'Hannah', 'Gareth', 'Leah', 'Philip', 'Naomi', 'Stephen', 'Grace', 'Andrew', 'Rachel', 'David', 'Kirsty', 'Matthew', 'Abbie', 'Simon'];
+  const last = ['McAuley', 'Boyd', 'Ferguson', 'Wilson', 'Kerr', 'Gibson', 'Patterson', 'Hamilton', 'Moore', 'Graham', 'Armstrong', 'Johnston', 'Campbell', 'Stewart', 'Thompson', 'Robinson', 'Martin', 'Morrison', 'Bell', 'Young'];
+  const rows = ['Forename,Surname,Email Address,Volunteer Role,Camp / Event'];
+  for (let i = 0; i < 40; i++) { const f = first[i % 20], l = last[(i * 7) % 20]; rows.push(`${f},${l},${(f + '.' + l).toLowerCase().replace(/[^a-z.]/g, '')}${i > 19 ? i : ''}@example.com,${['Camp Leader', 'Mission Team', 'SU Group Volunteer'][i % 3]},${i % 4 === 0 ? db.events[0]?.name || '' : ''}`); }
+  rows.push('Sam,,not-an-email,Camp Leader,');
+  return rows.join('\n');
+}
+function bulkLoad() {
+  const s = modal(`<header><h2>Add everyone from a spreadsheet</h2><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body" id="blbody"><p class="small muted" style="margin-top:0">Any spreadsheet works — you'll match its columns to ours next. Export from Excel or Google Sheets as CSV, or paste the rows straight in.</p>
+      <div class="dropzone" id="bldz"><b>Drop a CSV file here</b> or click to choose<input type="file" accept=".csv,.tsv,.txt,text/csv" hidden id="blfi"></div>
+      <div class="field" style="margin-top:12px"><label class="f" for="blpaste">…or paste rows (including the header row)</label><textarea class="input" id="blpaste" rows="5"></textarea></div>
+      <div class="row" style="gap:8px"><button class="btn red sm" id="blnext">Next: match columns</button><button class="btn ghost sm" id="blsample">Try a sample spreadsheet</button></div></div>`, 'wide');
+  const dz = $('#bldz', s), fi = $('#blfi', s);
+  dz.onclick = () => fi.click(); dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); }; dz.ondragleave = () => dz.classList.remove('over');
+  dz.ondrop = e => { e.preventDefault(); const f = e.dataTransfer.files[0]; f && f.text().then(t => mapColumns(t, f.name)); };
+  fi.onchange = () => fi.files[0] && fi.files[0].text().then(t => mapColumns(t, fi.files[0].name));
+  $('#blnext', s).onclick = () => { const t = $('#blpaste', s).value; if (!t.trim()) { toast('Paste some rows or choose a file'); return; } mapColumns(t, 'pasted rows'); };
+  $('#blsample', s).onclick = () => mapColumns(sampleLoadSheet(), 'volunteers-2027.csv');
+}
+function mapColumns(text, fname) {
+  text = text.replace(/^﻿/, '').trim(); const tsv = text.includes('\t');
+  const rows = (tsv ? text.split(/\r?\n/).map(l => l.split('\t')) : parseCSV(text + '\n')).filter(r => r.some(c => (c || '').trim()));
+  if (rows.length < 2) { toast('Need a header row and at least one person'); return; }
+  const head = rows[0].map(h => h.trim()), data = rows.slice(1); const map = head.map(guessField);
+  const body = $('#blbody'); if (!body) return;
+  const draw = () => { body.innerHTML = `<p class="small" style="margin-top:0"><b>${esc(fname)}</b> · ${data.length.toLocaleString('en-GB')} rows. We've guessed what each column is — check and change anything that's wrong.</p>
+    <div class="tablewrap"><table class="maptable"><thead><tr><th>Your column</th><th>Is…</th><th>Example</th></tr></thead><tbody>${head.map((h, i) => `<tr><td><b>${esc(h || '(blank)')}</b></td><td><select class="input" data-map="${i}" aria-label="What is the column ${esc(h)}">${MAP_FIELDS.map(([k, l]) => `<option value="${k}" ${map.at(i) === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td><td class="small muted">${esc(data.slice(0, 2).map(r => r[i] || '').filter(Boolean).join(', ') || '—')}</td></tr>`).join('')}</tbody></table></div>
+    <div class="field" style="margin-top:14px"><label class="f" for="bltype">If there's no staff/volunteer column, add everyone as</label><select class="input" id="bltype" style="max-width:240px"><option value="volunteer">Volunteers</option><option value="staff">Staff</option><option value="other">Other</option></select></div>
+    <div id="blwarn"></div>`;
+    const foot = $('#scrim footer') || (() => { const f = document.createElement('footer'); $('#scrim .modal').appendChild(f); return f; })();
+    foot.innerHTML = `<button class="btn ghost" id="blback">Back</button><button class="btn red" id="blgo">Check ${data.length.toLocaleString('en-GB')} rows</button>`;
+    const check = () => { const has = k => map.includes(k); const miss = []; if (!has('email')) miss.push('Email'); if (!has('full_name') && !(has('first_name') && has('last_name'))) miss.push('First and last name (or Full name)');
+      $('#blwarn').innerHTML = miss.length ? `<div class="notice bad small">${ICON.info}<div>Still needed: <b>${miss.join(', ')}</b></div></div>` : ''; $('#blgo').disabled = !!miss.length; };
+    $$('[data-map]').forEach(sel => sel.onchange = () => { map[+sel.dataset.map] = sel.value; check(); }); check();
+    $('#blback').onclick = () => { closeModal(); bulkLoad(); };
+    $('#blgo').onclick = () => { const def = $('#bltype').value; const col = k => map.indexOf(k);
+      const out = [['first_name', 'last_name', 'email', 'roles', 'events', 'type']];
+      data.forEach(r => { let f = col('first_name') >= 0 ? r[col('first_name')] : '', l = col('last_name') >= 0 ? r[col('last_name')] : '';
+        if ((!f || !l) && col('full_name') >= 0) { const sp = splitName((r[col('full_name')] || '').trim()); f ||= sp.first_name; l ||= sp.last_name; }
+        const t = (col('type') >= 0 ? r[col('type')] || '' : '').toLowerCase(); const type = /staff|employ/.test(t) ? 'staff' : /other|partner|church/.test(t) ? 'other' : t ? 'volunteer' : def;
+        const roles = (col('roles') >= 0 ? r[col('roles')] || '' : '').split(/[;,/]/).map(x => x.trim()).filter(Boolean).map(x => db.roles.find(rr => rr.toLowerCase() === x.toLowerCase()) || x).join(';');
+        out.push([(f || '').trim(), (l || '').trim(), (r[col('email')] || '').trim(), roles, col('events') >= 0 ? (r[col('events')] || '').split(/[;,]/).map(x => x.trim()).join(';') : '', type]); });
+      const csvText = out.map(r => r.map(c => /[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c).join(',')).join('\n');
+      const unknownRoles = [...new Set(out.slice(1).flatMap(r => r[3].split(';')).filter(x => x && !db.roles.includes(x)))];
+      if (unknownRoles.length) { db.roles.push(...unknownRoles); audit({ actor: 'admin', action: 'settings_saved', detail: { rolesAdded: unknownRoles } }); }
+      closeModal(); importPeople(); previewImport(csvText, fname); };
+  };
+  draw();
+}
+
+/* before launch, adding people never emails them — the rollout does that */
+const launchedYet = () => !!db.rollout && db.rollout.status !== 'draft';
+/* ---------- the launch page ---------- */
+function launchSteps() {
+  const S = db.settings, L = LAUNCH(), r = db.rollout;
+  const noTraining = live().filter(p => !requiredPathwaysFor(p).length);
+  const contactOk = S.dsoEmail && S.dsoName && S.dsoName !== 'Designated Safeguarding Officer';
+  return [
+    { k: 'contact', t: 'Who volunteers should contact', done: !!contactOk, d: contactOk ? `${S.dsoName} · ${S.dsoEmail}` : 'Shown in every email and on the welcome screen' },
+    { k: 'people', t: 'Add everyone', done: !!L.loadedAt, d: `${live().length.toLocaleString('en-GB')} people in the system` },
+    { k: 'training', t: 'Check who needs which training', done: !!L.trainingChecked && !noTraining.length, d: noTraining.length ? `${noTraining.length} people have no training assigned` : 'Everyone has training assigned' },
+    { k: 'invite', t: 'Check the invite email', done: !!L.inviteChecked, d: `The button signs people straight in, valid ${inviteDays()} days` },
+    { k: 'chase', t: 'Set up reminders for people who don’t respond', done: !!L.chaseChecked, d: L.chase.on ? `Nudge after ${L.chase.days} days, up to ${L.chase.max} times` : 'Off' },
+    { k: 'launch', t: 'Schedule and launch', done: !!r && r.status !== 'draft', d: r && r.status !== 'draft' ? `Rollout ${r.status === 'done' ? 'complete' : 'running'}` : 'Send invites in daily batches' },
+  ];
+}
+function renderLaunch() {
+  const L = LAUNCH(), steps = launchSteps(); const open = L.open || steps.find(x => !x.done)?.k || 'track';
+  const doneN = steps.filter(x => x.done).length, launched = steps.at(-1).done;
+  const S = db.settings, f = launchFunnel(), rule = RULE('r-assigned'), chase = chaseRule();
+  const samp = live().find(p => assignedCtx(p)) || live()[0];
+  const roleCounts = db.roles.map(role => ({ role, n: live().filter(p => p.roles.includes(role)).length }));
+  const noTraining = live().filter(p => !requiredPathwaysFor(p).length);
+  const body = {
+    contact: () => `<p class="small muted" style="margin-top:0">Volunteers see this in their emails, on the welcome screen and if they fail the quiz three times.</p>
+      <div class="grid g2"><div class="field"><label class="f" for="ln-dso">Name or role</label><input class="input" id="ln-dso" value="${esc(S.dsoName === 'Designated Safeguarding Officer' ? '' : S.dsoName || '')}" placeholder="e.g. Ruth Ferguson, Safeguarding Lead"></div>
+      <div class="field"><label class="f" for="ln-dsoe">Email</label><input class="input" type="email" id="ln-dsoe" value="${esc(S.dsoEmail || '')}" placeholder="safeguarding@suni.co.uk"></div></div>
+      <div class="field"><label class="f" for="ln-dsop">Phone (optional)</label><input class="input" id="ln-dsop" value="${esc(S.dsoPhone || '')}" style="max-width:260px"></div>
+      <button class="btn red sm" id="ln-save-contact">Save and continue</button>`,
+    people: () => `<p class="small muted" style="margin-top:0">Load your existing volunteers and staff in one go. Nobody is emailed at this stage — invites only go out when you launch.</p>
+      <div class="lnopts"><button class="lnopt" id="ln-sheet"><b>Upload a spreadsheet</b><span>Any columns — you'll match them to ours. Best for the first load.</span></button>
+      <button class="lnopt" id="ln-sync"><b>Sync a full list</b><span>For later updates: adds, updates and archives only what's changed.</span></button>
+      <a class="lnopt" href="#/admin/people"><b>Add people one by one</b><span>Fine for a handful of staff.</span></a></div>
+      <p class="small" style="margin:14px 0 0">${live().length.toLocaleString('en-GB')} active people now · <a href="#/admin/people">see them all</a></p>
+      ${live().length && !L.loadedAt ? `<button class="btn red sm" id="ln-people-ok" style="margin-top:12px">Everyone's in — continue</button>` : ''}`,
+    training: () => `<p class="small muted" style="margin-top:0">Training is assigned by role (and by event). Tick which training each role needs. Changes apply straight away; nobody is emailed.</p>
+      <div class="tablewrap"><table class="rolematrix"><thead><tr><th scope="col">Role</th><th scope="col" class="num">People</th>${db.pathways.filter(pw => pw.active !== false).map(pw => `<th scope="col">${esc(pw.title)}</th>`).join('')}</tr></thead><tbody>
+        ${roleCounts.map(({ role, n }) => `<tr><th scope="row">${esc(role)}</th><td class="num">${n}</td>${db.pathways.filter(pw => pw.active !== false).map(pw => `<td><input type="checkbox" data-rp="${esc(role)}|${pw.id}" ${pw.requiredForRoles.includes(role) ? 'checked' : ''} aria-label="${esc(role)} needs ${esc(pw.title)}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      ${noTraining.length ? `<div class="notice warn small" style="margin-top:14px">${ICON.info}<div><b>${noTraining.length} ${noTraining.length === 1 ? 'person has' : 'people have'} no training assigned</b> — usually because they have no role yet. ${noTraining.slice(0, 5).map(p => esc(p.name)).join(', ')}${noTraining.length > 5 ? '…' : ''}
+        <div class="row" style="gap:8px;margin-top:10px"><label for="ln-fixrole" class="small">Give them the role</label><select class="input" id="ln-fixrole" style="width:auto">${db.roles.map(r => `<option>${esc(r)}</option>`).join('')}</select><button class="btn ghost xs" id="ln-fix">Apply to all ${noTraining.length}</button></div></div></div>` : ''}
+      <button class="btn red sm" id="ln-training-ok" style="margin-top:14px" ${noTraining.length ? 'disabled' : ''}>Looks right — continue</button>`,
+    invite: () => `<div class="grid g2" style="align-items:start"><div><div class="field"><label class="f" for="ln-isub">Subject</label><input class="input" id="ln-isub" value="${esc(rule.subject)}"></div>
+      <div class="field"><label class="f" for="ln-ibody">Message</label><textarea class="input autogrow" id="ln-ibody" rows="8">${esc(rule.body)}</textarea><div class="help">{first_name}, {event} and {training} are filled in for each person.</div></div>
+      <div class="field"><label class="f" for="ln-days">The button signs people straight in for</label><select class="input" id="ln-days" style="max-width:200px">${[3, 7, 14].map(d => `<option value="${d}" ${inviteDays() === d ? 'selected' : ''}>${d} days</option>`).join('')}</select><div class="help">Once only. After that they request a sign-in link, valid 30 minutes. Longer is easier for volunteers; shorter is safer.</div></div>
+      <div class="row" style="gap:8px"><button class="btn red sm" id="ln-invite-ok">Save and continue</button><button class="btn ghost sm" id="ln-test">Preview as ${esc(firstName(samp?.name || ''))}</button></div></div>
+      <div id="ln-iprev" class="ln-prev">${samp ? emailHTML(mergeText(rule.subject, samp, assignedCtx(samp) || {}), mergeText(rule.body, samp, assignedCtx(samp) || {}), samp, { start: 'preview' }) : ''}</div></div>`,
+    chase: () => `<p class="small muted" style="margin-top:0">Some people won't respond to the first email. A friendly nudge brings most of them in.</p>
+      <label class="row small" style="gap:10px;min-height:44px"><input type="checkbox" id="ln-chon" ${L.chase.on ? 'checked' : ''}> Send a nudge to anyone who hasn't signed in</label>
+      <div class="grid g2"><div class="field"><label class="f" for="ln-chd">After</label><select class="input" id="ln-chd">${[3, 5, 7, 10].map(d => `<option value="${d}" ${L.chase.days === d ? 'selected' : ''}>${d} days</option>`).join('')}</select></div>
+      <div class="field"><label class="f" for="ln-chm">At most</label><select class="input" id="ln-chm">${[1, 2, 3].map(d => `<option value="${d}" ${L.chase.max === d ? 'selected' : ''}>${d} nudge${d === 1 ? '' : 's'}</option>`).join('')}</select></div></div>
+      <div class="field"><label class="f" for="ln-chsub">Nudge subject</label><input class="input" id="ln-chsub" value="${esc(chase.subject)}"></div>
+      <div class="field"><label class="f" for="ln-chbody">Nudge message</label><textarea class="input autogrow" id="ln-chbody" rows="6">${esc(chase.body)}</textarea></div>
+      <p class="small muted">After the last nudge, people show in the “Not responded” list below so you can follow up personally — often a team leader's text works best.</p>
+      <button class="btn red sm" id="ln-chase-ok">Save and continue</button>`,
+    launch: () => { const r = RO(); const n = rolloutCandidates(r).length; const plan = proActive() ? 'pro' : 'free'; const fc = forecast(n, perDayFor(r, plan), r.start, r.weekdaysOnly);
+      return r.status !== 'draft' ? `<p>Rollout is ${r.status}. <a href="#/admin/emails/rollout">See batches</a></p>` : `<div class="ln-sum"><div><b>${n.toLocaleString('en-GB')}</b><span>people to invite</span></div><div><b>${plan === 'pro' ? 'Pro' : 'Free'}</b><span>email plan${plan === 'pro' ? ` until ${fmtDate(PLAN().proUntil)}` : ''}</span></div><div><b>${fc.length}</b><span>sending day${fc.length === 1 ? '' : 's'}, from ${fmtDate(r.start)}</span></div><div><b>${fc.length ? fmtDate(fc.at(-1).day) : '—'}</b><span>everyone invited</span></div></div>
+        <p class="small muted">Invites go out ${perDayFor(r, plan)} a day, soonest event first. Change the plan, order or start date in the <a href="#/admin/emails/rollout">rollout planner</a>.</p>
+        <button class="btn red" id="ln-go" ${n ? '' : 'disabled'}>Launch · invite ${n.toLocaleString('en-GB')} people</button>`; },
+  };
+  const pct = x => f.invited ? Math.round(x / f.invited * 100) : 0;
+  adminShell('launch', pageHead('Launch', launched ? 'Rollout progress' : 'Launch the training platform', launched ? 'Who has responded to their invite, and who needs a nudge.' : 'Six steps to get everyone in and invited. Nothing is emailed until the last step.', '') + `
+    ${launched ? `<section class="card lnfunnel" aria-labelledby="ln-fh"><h2 id="ln-fh" class="ro-h">Responses</h2>
+      <div class="funnel">${[['Invited', f.invited, 'var(--ink-2)'], ['Signed in', f.signedIn, 'var(--sky)'], ['Started', f.started, 'var(--amber)'], ['Training complete', f.done, 'var(--teal)']].map(([l, n, c]) => `<div class="fn-row"><span class="fn-l">${l}</span><span class="fn-bar"><i style="width:${pct(n)}%;background:${c}"></i></span><span class="fn-n"><b>${n.toLocaleString('en-GB')}</b> ${l === 'Invited' ? '' : `· ${pct(n)}%`}</span></div>`).join('')}</div>
+      <div class="row between" style="margin-top:18px;gap:10px;flex-wrap:wrap"><span class="small"><b>${f.waiting.length.toLocaleString('en-GB')}</b> haven't signed in yet${L.chase.on ? ` · nudged automatically after ${L.chase.days} days (max ${L.chase.max})` : ''}</span>
+        <div class="row" style="gap:8px"><button class="btn ghost sm" id="ln-list">See who</button><button class="btn red sm" id="ln-nudge" ${f.waiting.length ? '' : 'disabled'}>Nudge them now</button></div></div>
+      ${demoOn() ? `<div class="demo-tools noprint" style="margin-top:14px"><span class="dt-lbl">Demo controls</span><button class="dt-btn" id="ln-simresp">Simulate some volunteers responding</button><button class="dt-btn" id="ro-sim-l">Send the next batch</button></div>` : ''}</section>` : ''}
+    <div class="lnsteps" role="list">${steps.map((x, i) => `<section class="lnstep ${x.done ? 'done' : ''} ${open === x.k ? 'open' : ''}" role="listitem" aria-labelledby="ln-${x.k}-h">
+      <button class="lnhead" data-ln="${x.k}" aria-expanded="${open === x.k}" id="ln-${x.k}-h"><span class="lnnum" aria-hidden="true">${x.done ? ICON.check : i + 1}</span><span class="lntext"><b>${x.t}</b><span>${esc(x.d)}</span></span><span class="sr-only">${x.done ? 'Done' : 'To do'}</span><svg class="lnchev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      ${open === x.k ? `<div class="lnbody">${body[x.k]()}</div>` : ''}</section>`).join('')}</div>
+    <p class="small muted" style="margin-top:14px">${doneN} of ${steps.length} steps done${launched ? '' : ' · you can come back to this page at any time'}</p>`);
+  const go = k => { L.open = k; persist(); renderLaunch(); };
+  const next = () => { L.open = null; persist(); renderLaunch(); };
+  $$('[data-ln]').forEach(b => b.onclick = () => go(open === b.dataset.ln ? 'none' : b.dataset.ln));
+  $('#ln-save-contact') && ($('#ln-save-contact').onclick = () => { const n = $('#ln-dso').value.trim(), e = $('#ln-dsoe').value.trim(); if (!n || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { toast('Add a name and a valid email'); return; }
+    Object.assign(S, { dsoName: n, dsoEmail: e, dsoPhone: $('#ln-dsop').value.trim() }); audit({ actor: 'admin', action: 'settings_saved', detail: { dsoName: n } }); toast('Contact saved'); next(); });
+  $('#ln-sheet') && ($('#ln-sheet').onclick = bulkLoad); $('#ln-sync') && ($('#ln-sync').onclick = () => rosterSync());
+  $('#ln-people-ok') && ($('#ln-people-ok').onclick = () => { L.loadedAt = now(); next(); });
+  $$('[data-rp]').forEach(c => c.onchange = () => { const [role, pid] = c.dataset.rp.split('|'); const pw = P(pid);
+    pw.requiredForRoles = c.checked ? [...new Set([...pw.requiredForRoles, role])] : pw.requiredForRoles.filter(x => x !== role);
+    audit({ actor: 'admin', action: 'pathway_roles_changed', pathwayId: pid, detail: { role, required: c.checked } }); persist(); renderLaunch(); });
+  $('#ln-fix') && ($('#ln-fix').onclick = () => { const role = $('#ln-fixrole').value; noTraining.forEach(p => { p.roles = [...new Set([...p.roles, role])]; }); audit({ actor: 'admin', action: 'data_imported', detail: { kind: `Role “${role}” given to ${noTraining.length} people` } }); persist(); toast(`${noTraining.length} people given the role ${role}`); renderLaunch(); });
+  $('#ln-training-ok') && ($('#ln-training-ok').onclick = () => { L.trainingChecked = now(); next(); });
+  if ($('#ln-isub')) { const pv = () => { $('#ln-iprev').innerHTML = emailHTML(mergeText($('#ln-isub').value, samp, assignedCtx(samp) || {}), mergeText($('#ln-ibody').value, samp, assignedCtx(samp) || {}), samp, { start: 'preview' }); };
+    $('#ln-isub').oninput = pv; $('#ln-ibody').oninput = pv; $('#ln-test').onclick = () => $('#ln-iprev').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('#ln-invite-ok').onclick = () => { rule.subject = $('#ln-isub').value; rule.body = $('#ln-ibody').value; S.inviteDays = +$('#ln-days').value; L.inviteChecked = now(); audit({ actor: 'admin', action: 'settings_saved', detail: { inviteEmail: 'updated', inviteDays: S.inviteDays } }); toast('Invite saved'); next(); }; }
+  $('#ln-chase-ok') && ($('#ln-chase-ok').onclick = () => { Object.assign(L.chase, { on: $('#ln-chon').checked, days: +$('#ln-chd').value, max: +$('#ln-chm').value }); chase.subject = $('#ln-chsub').value; chase.body = $('#ln-chbody').value; L.chaseChecked = now(); persist(); toast('Nudges saved'); next(); });
+  $('#ln-go') && ($('#ln-go').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to launch')) return; const r = RO(); r.queue = rolloutCandidates(r).map(p => p.id); r.status = 'running'; r.waves = []; r.startedAt = now();
+    audit({ actor: 'admin', action: 'rollout_started', detail: { people: r.queue.length, start: r.start, plan: PLAN().plan, perDay: perDayFor(r, proActive() ? 'pro' : 'free') } });
+    const n = r.start <= todayISO() ? processRollout() : 0; L.open = null; persist(); toast(n ? `Launched · ${n} invites sent today` : `Launched · first batch ${fmtDate(nextSendDay(r.start, r.weekdaysOnly))}`); renderLaunch(); });
+  $('#ln-nudge') && ($('#ln-nudge').onclick = e => { if (!confirmInline(e.currentTarget, `Click again to nudge ${f.waiting.length}`)) return; const n = processChasers(true); toast(n ? `${n} nudge${n === 1 ? '' : 's'} sent` : 'Everyone has had the maximum number of nudges'); renderLaunch(); });
+  $('#ln-list') && ($('#ln-list').onclick = () => { const rows = f.waiting.map(Person).filter(Boolean);
+    modal(`<header><h2>Not signed in yet · ${rows.length}</h2><button class="iconbtn" data-close>${ICON.x}</button></header><div class="body"><div class="tablewrap"><table><thead><tr><th>Name</th><th>Invited</th><th>Nudges</th></tr></thead><tbody>${rows.slice(0, 200).map(p => `<tr><td><a href="#/admin/people/${p.id}">${esc(p.name)}</a><div class="tiny muted">${esc(p.email)}</div></td><td>${fmtDate(f.inv.get(p.id))}</td><td>${nudgesFor(p.id)}</td></tr>`).join('')}</tbody></table></div>${rows.length > 200 ? `<p class="small muted">Showing 200 of ${rows.length}</p>` : ''}</div>
+      <footer><button class="btn ghost" id="ln-exp">Download as CSV</button><button class="btn red" data-close>Done</button></footer>`, 'wide');
+    $('#ln-exp').onclick = () => { download(`not-signed-in-${stamp()}.csv`, csv([['first_name', 'last_name', 'email', 'invited', 'nudges'], ...rows.map(p => [p.first_name, p.last_name, p.email, f.inv.get(p.id), nudgesFor(p.id)])])); audit({ actor: 'admin', action: 'report_exported', detail: { report: 'Not signed in', rows: rows.length } }); }; });
+  $('#ln-simresp') && ($('#ln-simresp').onclick = () => { const ids = f.waiting.slice(0, Math.ceil(f.waiting.length * .45)); ids.forEach((id, i) => { audit({ personId: id, actor: 'learner', action: 'login', detail: { method: 'invite_link', simulated: true } });
+      if (i % 2 === 0) { const p = Person(id), pw = requiredPathwaysFor(p)[0]; if (pw) { const pr = prog(id, pw.id); pr.steps[pw.steps[0].id] = { done: true, rev: pw.steps[0].rev, at: now() }; pr.startedAt ||= now(); } } }); persist(); toast(`${ids.length} volunteers signed in (simulated)`); renderLaunch(); });
+  $('#ro-sim-l') && ($('#ro-sim-l').onclick = () => { const r = db.rollout; if (!r || r.status !== 'running') { toast('No batches left'); return; } const last = r.waves.length ? dayISO(new Date(r.waves.at(-1).day + 'T12:00').getTime() + DAY) : r.start; const n = sendWave(r, nextSendDay(last, r.weekdaysOnly), true); toast(`${n} invites sent (simulated next day)`); renderLaunch(); });
+}
+
 /* ---------- background jobs (demo: run while the app is open) ---------- */
-function backgroundJobs() { const a = processScheduled(), b = processReleases() + processRollout(); if (a || b) { persist(); if (location.hash.startsWith('#/admin')) route(); } }
+function backgroundJobs() { const a = processScheduled(), b = processReleases() + processRollout() + (db.launch ? processChasers() : 0); if (a || b) { persist(); if (location.hash.startsWith('#/admin')) route(); } }
 
 const DEMO_RELEASE = { 'ev-ballycastle': { mode: 'before', weeks: 8 }, 'ev-beach': { mode: 'date', date: '2027-03-01' }, 'ev-teen': { mode: 'manual' } };
 /* ---------- boot ---------- */
@@ -2116,7 +2311,7 @@ db = Store.load();
 if (!db || db.schema !== 1) seed();
 db.scheduled ||= [];
 db.events.forEach(e => { if (!e.release) e.release = DEMO_RELEASE[e.id] || { mode: 'now' }; });
-dailyCleanup(); processScheduled(); processReleases(); processRollout();
+dailyCleanup(); processScheduled(); processReleases(); processRollout(); if (db.launch) processChasers();
 setInterval(() => { if ($('#scrim') || $('#drawer')) { processScheduled(); processReleases(); persist(); return; } backgroundJobs(); }, 30000);
 addEventListener('hashchange', route);
 route();

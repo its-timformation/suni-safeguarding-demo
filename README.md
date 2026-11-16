@@ -97,3 +97,17 @@ SUNI's choice is **Resend Pro for the first month ($20), then the free plan**. P
 On the free plan (100 emails a day, including sign-in links), bulk sends keep 40 a day in reserve for sign-in links and reminders. Anything that doesn't fit today is held and goes out at 9am the next day, so the limit is never exceeded. The daily job sends each batch; in the demo, "Simulate the next sending day" fast-forwards.
 
 New volunteers see a short welcome the first time they sign in: what to expect, how long it takes, and how to sign in next time.
+
+## Launch (admin onboarding)
+
+**Launch** in the admin sidebar walks through going live in six steps. The overview shows a banner until it's done.
+1. **Contact:** the safeguarding contact shown in emails and on the welcome screen.
+2. **Add everyone:** upload any spreadsheet. Its columns are matched automatically (Forename/Surname/Email Address/Role/Event…) and can be corrected. Rows go through the normal import preview. Nobody is emailed before launch.
+3. **Check who needs which training:** a roles × pathways grid, plus a one-click fix for people with no role.
+4. **Invite email:** edit it with a live preview, and choose how long the sign-in button works (3, 7 or 14 days).
+5. **Nudges:** automatic reminders for people who haven't signed in (after N days, at most N times).
+6. **Schedule and launch:** uses the rollout planner (Pro for the first month by default).
+
+After launch, the page shows the response figures (invited → signed in → started → complete), lists who hasn't responded (downloadable as CSV), and has a "Nudge them now" button.
+
+**Invite links sign people straight in.** Every training email carries a one-time start link (`#/start/<token>`), valid for the chosen number of days, so volunteers can start in one tap. Used or expired links explain what happened and pre-fill the sign-in form. On first visit, volunteers confirm their name as it should appear on certificates.
