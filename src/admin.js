@@ -3,15 +3,17 @@
    ===================================================================== */
 const NAV = [
   ['', 'Overview', 'grid'], ['people', 'People', 'people'], ['events', 'Events', 'cal'],
-  ['pathways', 'Pathways', 'path'], ['emails', 'Emails', 'mail'], ['audit', 'Audit log', 'log'], ['settings', 'Settings', 'cog'],
+  ['pathways', 'Pathways', 'path'], ['emails', 'Emails', 'mail'], ['audit', 'Audit log', 'log'], ['privacy', 'Data & privacy', 'shield'], ['settings', 'Settings', 'cog'],
 ];
 function adminShell(active, inner) {
-  app().innerHTML = topbar(`<span class="small muted hide-sm">Signed in as <b>${esc(db.settings.adminName)}</b></span>`, '#/admin') +
+  app().innerHTML = topbar(`<span class="small muted hide-sm">Signed in as <b>${esc(db.settings.adminName)}</b></span><button class="btn ghost sm" data-act="adminlogout">Log out</button>`, '#/admin') +
     `<main class="wrap"><div class="adminshell">
-      <nav class="sidenav noprint">${NAV.map(([k, l, i]) => `<a href="#/admin${k ? '/' + k : ''}" class="${active === k ? 'on' : ''}">${ICON[i]} ${l}</a>`).join('')}</nav>
+      <nav class="sidenav noprint">${NAV.map(([k, l, i]) => `<a href="#/admin${k ? '/' + k : ''}" class="${active === k ? 'on' : ''}">${ICON[i]} ${l}</a>`).join('')}
+</nav>
       <div class="fadein" id="adm">${inner}</div></div></main>` + demobar('admin');
 }
 function adminRoute(parts) {
+  if (!isAdmin()) return renderAdminLogin();
   const [sec, id, sub] = parts;
   if (sec === 'people' && id && sub === 'followup') return renderFollowUp(id, parts[3]);
   if (sec === 'people' && id) { recordTab = ['training', 'attempts', 'certs', 'activity'].includes(sub) ? sub : 'training'; return renderPersonRecord(id); }
@@ -23,6 +25,7 @@ function adminRoute(parts) {
   if (sec === 'emails') return renderEmails();
   if (sec === 'audit') return renderAudit();
   if (sec === 'settings') return renderSettings();
+  if (sec === 'privacy') return renderPrivacy();
   if (sec === 'cert' && id) return renderCert(id, null);
   renderOverview();
 }
@@ -30,13 +33,13 @@ function readyCounts(ev) { const c = { ready: 0, renew: 0, todo: 0, total: 0 }; 
 const SEG = [['ready', 'Ready', 'var(--teal)'], ['renew', 'Needs refresher', 'var(--amber)'], ['todo', 'Not trained', 'var(--red)']];
 const readyBar = (c, evId) => c.total ? `<div class="segbar" role="img" aria-label="${SEG.map(([k, l]) => `${c[k]} ${l}`).join(', ')}">${SEG.map(([k, l, col]) => c[k] ? `<a href="#/admin/people" data-pf='${JSON.stringify({ event: evId, ready: k })}' style="flex:${c[k]};background:${col}" title="${c[k]} ${l} — click to see who"></a>` : '').join('')}</div>` : '<div class="segbar empty"></div>';
 const readyLegend = (c, evId) => `<div class="seglegend">${SEG.map(([k, l, col]) => `<a href="#/admin/people" data-pf='${JSON.stringify({ event: evId, ready: k })}'><span class="sw" style="background:${col}"></span>${l} <b>${c[k]}</b></a>`).join('')}</div>`;
-function bindPf() { $$('[data-pf]').forEach(a => a.onclick = e => { e.preventDefault(); peopleFilter = { ...PF0, ...JSON.parse(a.dataset.pf) }; peopleShown = 40; go('#/admin/people'); }); }
+function bindPf() { $$('[data-pf]').forEach(a => a.onclick = e => { e.preventDefault(); peopleFilter = { ...PF0, ...JSON.parse(a.dataset.pf) }; peoplePage = 1; go('#/admin/people'); }); }
 const pageHead = (eyebrow, title, sub, actions = '') => `<div class="pagehead"><div><div class="eyebrow">${eyebrow}</div><h1 style="font-size:32px;margin-top:4px">${title}</h1>${sub ? `<p class="muted">${sub}</p>` : ''}</div><div class="row noprint">${actions}</div></div>`;
 const avatar = p => `<span class="avatar" style="background:${avatarColour(p.name)}">${initials(p.name)}</span>`;
 
 /* ---------- overview ---------- */
 let matrixFilter = { q: '', event: '', role: '', status: '' }, matrixShown = 25;
-const PF0 = { q: '', event: '', role: '', status: '', ready: '', pathway: '' }; let peopleFilter = { ...PF0 }, peopleShown = 40;
+const PF0 = { q: '', event: '', role: '', status: '', ready: '', pathway: '' }; let peopleFilter = { ...PF0 }, peopleShown = 40, peoplePage = 1; const PAGE = 25;
 function renderOverview() {
   const N = live().length;
   const per = live().map(p => { const req = requiredPathwaysFor(p); return { p, req, sts: req.map(pw => ({ pw, st: statusOf(p, pw) })) }; });
@@ -51,7 +54,7 @@ function renderOverview() {
       <div class="kn" style="color:${n ? col : 'var(--muted)'}">${n}</div><div class="kl">${label}</div><div class="tiny muted">${sub}</div>${n && filter.status !== 'locked' ? `<button class="btn soft xs kremind" data-kremind="${filter.status}">✉️ Remind all ${n}</button>` : ''}</a>`;
   const ST = [['complete', 'Complete', 'var(--teal)'], ['due', 'Due soon', 'var(--amber)'], ['progress', 'In progress', 'var(--sky)'], ['none', 'Not started', '#CFC8C0'], ['expired', 'Expired', 'var(--red)'], ['locked', 'Needs review', 'var(--plum)']];
   adminShell('', pageHead('Overview', 'Training at a glance', `${fmtDate(now())} · ${N} ${N === 1 ? 'person' : 'people'} · ${plural(db.pathways.length, 'pathway')} · ${plural(upcoming.length, 'upcoming event')}`,
-    `<button class="btn ghost sm" data-x="register">${ICON.dl} Training register</button><button class="btn ghost sm" data-x="audit">${ICON.dl} Audit log</button>`) + `
+    `<button class="btn ghost sm" id="xaudrep">${ICON.dl} Audit report (CSV)</button><button class="btn ghost sm" data-x="register">${ICON.dl} Training register</button><button class="btn ghost sm" data-x="audit">${ICON.dl} Audit log</button>`) + `
     <div class="ovtop">
       <div class="card herokpi">
         <div class="bigring"><svg width="132" height="132" viewBox="0 0 132 132"><circle cx="66" cy="66" r="${r}" stroke="#EFEAE4" stroke-width="14" fill="none"/><circle cx="66" cy="66" r="${r}" stroke="var(--teal)" stroke-width="14" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct / 100)}" transform="rotate(-90 66 66)"/></svg><b>${pct}%</b></div>
@@ -81,7 +84,7 @@ function renderOverview() {
       </div>
       <div class="card"><div class="row between" style="margin-bottom:6px"><h3>Recent activity</h3><a class="small" href="#/admin/audit">Audit log</a></div>${activityList(db.audit.slice(-10).reverse())}</div>
     </div>`);
-  bindPf(); bindExports();
+  bindPf(); bindExports(); $("#xaudrep") && ($("#xaudrep").onclick = exportAuditReport);
   $$('[data-kremind]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const k = b.dataset.kremind; const ppl = live().filter(p => requiredPathwaysFor(p).some(pw => statusOf(p, pw).key === k));
     composeEmail(ppl, { title: k === 'expired' ? 'Remind everyone whose training has expired' : 'Remind everyone due soon', ruleId: k === 'expired' ? 'r-expired' : 'r-expiring', ctxFor: p => { const x = requiredPathwaysFor(p).map(pw => ({ pw, st: statusOf(p, pw) })).find(y => y.st.key === k); return { training: x?.pw.title, expiry: x?.st.c?.expiresAt, daysLeft: x?.st.c ? Math.ceil((new Date(x.st.c.expiresAt) - Date.now()) / DAY) : '' }; } }); });
 }
@@ -99,6 +102,22 @@ function auditText(a) {
     case 'followup_recorded': return `<b>${esc(d.by)}</b> held a follow-up with <b>${esc(d.name || who)}</b> <span class="muted">· ${esc(d.how)} · ${esc(pw)}${d.reopened ? ' · quiz reopened' : ''}</span>${d.notes ? `<br><span class="tiny muted">“${esc(d.notes)}”</span>` : ''}`;
     case 'email_sent': return `${a.actor === 'system' ? 'Automatic email' : 'Email'} to <b>${esc(d.name || who)}</b> <span class="muted">· “${esc(d.subject)}”</span>`;
     case 'emails_sent': return `Admin sent <b>${d.count}</b> email${d.count === 1 ? '' : 's'} <span class="muted">· ${esc(d.template || d.subject || '')}</span>`;
+    case 'volunteer_archived': return `Admin archived <b>${esc(d.name || who)}</b>${d.reason ? ` <span class="muted">· ${esc(d.reason)}</span>` : ''}`;
+    case 'volunteer_reactivated': return `<b>${esc(d.name || who)}</b> reactivated <span class="muted">· ${esc(d.source || 'admin')} · ${d.records_kept} record${d.records_kept === 1 ? '' : 's'} kept${d.records_removed ? `, ${d.records_removed} over ${retentionYears()} years old removed` : ''}</span>`;
+    case 'volunteer_deleted': return `${a.actor === 'system' ? 'Automatic cleanup' : 'Admin'} permanently deleted a volunteer <span class="muted">· ref ${esc(d.ref)} · ${d.records_deleted} records and ${d.audit_entries_deleted} audit entries erased · ${esc(d.reason || '')}</span>`;
+    case 'volunteer_created': return `Admin added <b>${esc(d.name || who)}</b>${d.source ? ` <span class="muted">· ${esc(d.source)}</span>` : ''}`;
+    case 'volunteer_updated': return `Admin updated <b>${esc(d.name || who)}</b> <span class="muted">· ${esc((d.changes || []).join(', '))}${d.source ? ' · ' + esc(d.source) : ''}</span>`;
+    case 'retention_cleanup': return `Data cleanup (${esc(d.source)}) <span class="muted">· before ${esc(d.cutoff)} · ${d.records_removed} records, ${d.volunteers_deleted} volunteers, ${d.audit_entries_removed} audit entries removed</span>`;
+    case 'data_imported': return `Admin imported data <span class="muted">· ${esc(d.kind || '')}${d.file ? ' · ' + esc(d.file) : ''}${d.created != null ? ` · ${d.created} new, ${d.updated} updated, ${d.reactivated} reactivated, ${d.skipped} skipped` : ''}${d.total ? ` · ${d.total} volunteers` : ''}</span>`;
+    case 'report_exported': return `Admin downloaded <b>${esc(d.report || 'a report')}</b>${d.rows ? ` <span class="muted">· ${d.rows} rows</span>` : ''}`;
+    case 'magic_link_sent': return `Sign-in link emailed to <b>${esc(d.name || who)}</b> <span class="muted">· valid ${LINK_MINUTES} minutes</span>`;
+    case 'login': return `<b>${esc(d.name || who)}</b> signed in <span class="muted">· magic link</span>`;
+    case 'logout': return `<b>${esc(d.name || who)}</b> logged out`;
+    case 'login_blocked': return `Sign-in refused <span class="muted">· ${esc(d.reason || 'not an active volunteer')}</span>`;
+    case 'admin_login': return `Admin signed in`;
+    case 'admin_logout': return `Admin logged out`;
+    case 'admin_preview': return `Admin previewed <b>${esc(d.name || who)}</b>’s training as a volunteer`;
+    case 'module_completed': return `<b>${esc(who)}</b> completed <b>${esc(d.module || pw)}</b> <span class="muted">· record saved</span>`;
     case 'person_archived': case 'person_restored': return `Admin ${a.action === 'person_archived' ? 'archived' : 'restored'} <b>${esc(d.name || who)}</b>`;
     case 'quiz_unlocked': case 'invite_copied': case 'person_added': case 'person_updated': case 'person_removed': return `Admin ${ACTION_LABEL[a.action]} <b>${esc(d.name || who)}</b>${pw ? ` <span class="muted">· ${esc(pw)}</span>` : ''}${d.changes ? ` <span class="muted">· ${esc(d.changes.join(', '))}</span>` : ''}`;
     case 'completion_recorded': return `Admin recorded a completion for <b>${esc(d.name || who)}</b> <span class="muted">· ${esc(pw)} · ${esc(d.method || '')}</span>${d.reason ? `<br><span class="tiny muted">“${esc(d.reason)}”</span>` : ''}`;
@@ -175,7 +194,7 @@ function renderPeople() {
   const f = peopleFilter; const ev = f.event && EventById(f.event);
   const count = t => t === 'all' ? live().length : t === 'archived' ? db.people.filter(p => p.archived).length : live().filter(p => typeOf(p) === t).length;
   adminShell('people', pageHead('People', 'People', 'Training is assigned automatically from each person’s roles and the events they’ve signed up for.',
-    `<button class="btn ghost sm" id="pmail">✉️ Email these people</button><button class="btn ghost sm" id="pprint">${ICON.print} Print list</button><button class="btn ghost sm" id="imp">Import CSV</button><button class="btn red sm" id="addp">+ Add person</button>`) + `
+    `<button class="btn ghost sm" id="prem">✉️ Send reminders</button><button class="btn ghost sm" id="pmail">Email these people</button><button class="btn ghost sm" id="pprint">${ICON.print} Print list</button><button class="btn ghost sm" id="imp">Import CSV</button><button class="btn red sm" id="addp">+ Add person</button>`) + `
     <div class="tabs" role="tablist">${[['all', 'Everyone'], ...TYPES, ['archived', 'Archived']].map(([k, l]) => `<button role="tab" class="${peopleTab === k ? 'on' : ''}" aria-selected="${peopleTab === k}" data-ptab="${k}">${l} <span>${count(k)}</span></button>`).join('')}</div>
     <div class="filters">
       <input class="input" placeholder="Search name, email or church…" id="pq" value="${esc(f.q)}" style="flex:1 1 240px">
@@ -187,28 +206,35 @@ function renderPeople() {
       ${Object.keys(PF0).some(k => f[k]) ? `<button class="btn ghost sm" id="pclear">Clear</button>` : ''}
     </div>
     ${ev ? `<div class="card" style="margin-bottom:14px;padding:16px 18px"><div class="row between" style="margin-bottom:8px"><b>${esc(ev.name)}</b><span class="small muted">${fmtDate(ev.date)}</span></div>${readyBar(readyCounts(ev), ev.id)}${readyLegend(readyCounts(ev), ev.id)}</div>` : ''}
+    ${peopleTab === 'archived' ? `<div class="notice info small" style="margin-bottom:14px">${ICON.info}<div>Archived volunteers can’t sign in and never get reminders. Their records are kept for ${retentionYears()} years, then deleted automatically. Reactivating keeps anything from the last ${retentionYears()} years.</div></div>` : ''}
     <div id="plist"></div>`);
+  const pager = n => { const pages = Math.max(1, Math.ceil(n / PAGE)); if (peoplePage > pages) peoplePage = pages;
+    const from = n ? (peoplePage - 1) * PAGE + 1 : 0, to = Math.min(n, peoplePage * PAGE);
+    const nums = [...new Set([1, peoplePage - 1, peoplePage, peoplePage + 1, pages])].filter(x => x >= 1 && x <= pages).sort((a, b) => a - b);
+    return `<div class="pager"><span class="small muted">Showing <b>${from.toLocaleString('en-GB')}–${to.toLocaleString('en-GB')}</b> of <b>${n.toLocaleString('en-GB')}</b></span>${pages > 1 ? `<div class="pgs"><button class="btn ghost xs" data-pg="${peoplePage - 1}" ${peoplePage === 1 ? 'disabled' : ''}>‹ Prev</button>${nums.map((x, i) => `${i && x - nums[i - 1] > 1 ? '<span class="muted">…</span>' : ''}<button class="btn xs ${x === peoplePage ? 'red' : 'ghost'}" data-pg="${x}">${x}</button>`).join('')}<button class="btn ghost xs" data-pg="${peoplePage + 1}" ${peoplePage === pages ? 'disabled' : ''}>Next ›</button></div>` : ''}</div>`; };
   const draw = () => {
     const list = filteredPeople();
     $('#plist').innerHTML = `<div class="tablewrap"><table class="clickable"><thead><tr><th>Name</th><th>Type &amp; roles</th><th>Serving at</th><th>Training</th><th>Status</th><th></th></tr></thead><tbody>
-    ${list.slice(0, peopleShown).map(p => { const { req, done, worst } = personSummary(p);
+    ${list.slice((peoplePage - 1) * PAGE, peoplePage * PAGE).map(p => { const { req, done, worst } = personSummary(p);
       return `<tr data-row="${p.id}" tabindex="0"><td><span class="person">${avatar(p)}<span><b>${esc(p.name)}</b><br><span class="tiny muted">${esc(p.email)}</span></span></span></td>
         <td><span class="typepill t-${typeOf(p)}">${typeOf(p)}</span>${p.roles.map(r => `<span class="tag">${esc(r)}</span>`).join('')}</td>
         <td>${p.eventIds.map(id => `<span class="tag nowrap">${esc(EventById(id)?.name || '')}</span>`).join('') || '<span class="muted">—</span>'}</td>
         <td style="min-width:110px"><div class="meter"><i style="width:${req.length ? done / req.length * 100 : 0}%"></i></div><span class="tiny muted">${done}/${req.length}</span></td>
-        <td>${p.archived ? '<span class="chip st-none">Archived</span>' : worst ? chip(worst) : '<span class="tiny muted">Nothing assigned</span>'}</td>
-        <td class="rowacts"><button class="btn ghost xs" data-remind="${p.id}" title="Send reminder email">✉️</button><button class="btn ghost xs" data-copy="${p.token}" title="Copy invite link">${ICON.link}</button><button class="btn ghost xs" data-edit="${p.id}">Edit</button><span class="chev">${ICON.arrow.replace('width="18" height="18"', 'width="16" height="16"')}</span></td></tr>`;
+        <td>${p.archived ? `<span class="chip st-none">Archived ${fmtDate(p.archivedAt)}</span>` : worst ? chip(worst) : '<span class="tiny muted">Nothing assigned</span>'}</td>
+        <td class="rowacts">${p.archived ? `<button class="btn teal xs" data-react="${p.id}">Reactivate</button><button class="btn ghost xs" data-del="${p.id}" style="color:var(--red-600)">Delete</button>` : `<button class="btn ghost xs" data-remind="${p.id}" title="Send reminder email">✉️</button><button class="btn ghost xs" data-copy="${p.token}" title="Copy invite link">${ICON.link}</button><button class="btn ghost xs" data-edit="${p.id}">Edit</button>`}<span class="chev">${ICON.arrow.replace('width="18" height="18"', 'width="16" height="16"')}</span></td></tr>`;
     }).join('') || '<tr><td colspan="6" class="empty">No one matches those filters</td></tr>'}</tbody></table></div>
-    ${list.length > peopleShown ? `<div class="row" style="justify-content:center;margin-top:12px"><span class="small muted">Showing ${peopleShown} of ${list.length}</span><button class="btn ghost sm" id="pmore">Show 40 more</button></div>` : `<div class="small muted" style="text-align:center;margin-top:10px">${list.length} ${list.length === 1 ? 'person' : 'people'}</div>`}`;
+    ${pager(list.length)}`;
     bindCopy();
     $$('[data-row]').forEach(tr => { const open = e => { if (e.target.closest('button,a')) return; go('#/admin/people/' + tr.dataset.row); }; tr.onclick = open; tr.onkeydown = e => e.key === 'Enter' && open(e); });
     $$('[data-edit]').forEach(b => b.onclick = e => { e.stopPropagation(); personPanel(Person(b.dataset.edit)); });
     $$('[data-remind]').forEach(b => b.onclick = e => { e.stopPropagation(); sendReminder(Person(b.dataset.remind)); });
-    $('#pmore') && ($('#pmore').onclick = () => { peopleShown += 40; draw(); });
+    $$('[data-pg]').forEach(b => b.onclick = () => { peoplePage = +b.dataset.pg; draw(); $('#plist').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+    $$('[data-react]').forEach(b => b.onclick = e => { e.stopPropagation(); confirmReactivate(Person(b.dataset.react), renderPeople); });
+    $$('[data-del]').forEach(b => b.onclick = e => { e.stopPropagation(); confirmDelete(Person(b.dataset.del), renderPeople); });
   };
   draw(); bindPf();
-  const set = (k, v) => { f[k] = v; if (k === 'event') f.ready = ''; peopleShown = 40; k === 'event' ? renderPeople() : draw(); };
-  $$('[data-ptab]').forEach(b => b.onclick = () => { peopleTab = b.dataset.ptab; peopleShown = 40; renderPeople(); });
+  const set = (k, v) => { f[k] = v; if (k === 'event') f.ready = ''; peoplePage = 1; k === 'event' ? renderPeople() : draw(); };
+  $$('[data-ptab]').forEach(b => b.onclick = () => { peopleTab = b.dataset.ptab; peoplePage = 1; renderPeople(); });
   $('#pq').oninput = e => set('q', e.target.value);
   $('#pev').onchange = e => set('event', e.target.value);
   $('#prole').onchange = e => set('role', e.target.value);
@@ -218,6 +244,7 @@ function renderPeople() {
   $('#pclear') && ($('#pclear').onclick = () => { peopleFilter = { ...PF0 }; renderPeople(); });
   $('#addp').onclick = () => personPanel();
   $('#imp').onclick = importPeople;
+  $('#prem').onclick = openSendReminders;
   $('#pprint').onclick = () => printPeopleList(filteredPeople());
   $('#pmail').onclick = () => { const ppl = filteredPeople().filter(p => !p.archived); const ev = peopleFilter.event && EventById(peopleFilter.event); composeEmail(ppl, { title: 'Email this list', ctxFor: ev ? () => ({ event: ev }) : () => ({}), note: `Sending to the ${ppl.length} people in your current People view.` }); };
 }
@@ -260,9 +287,10 @@ function personPanel(p, section = 'details') {
             <button class="btn ghost xs" data-drs="${pw.id}" style="color:var(--red-600)">Reset training…</button></div></div>`; }).join('') + `<p class="tiny muted">Each change asks for a reason and is recorded in the audit log.</p>`
         : '<div class="empty">No training assigned — add a role or event first.</div>'; },
     account: () => `<div class="dtrain"><b>Invite link</b><div class="tiny muted" style="margin:3px 0 10px">Send this to ${esc(firstName(w.name))} so they can do their training. Generating a new one stops the old link working.</div>
-        <div class="row" style="gap:6px"><button class="btn ghost xs" data-copy="${orig.token}">${ICON.link} Copy link</button><button class="btn ghost xs" id="dnewtok">Generate new link</button><a class="btn ghost xs" href="#/i/${orig.token}">Open as ${esc(firstName(w.name))}</a></div></div>
-      <div class="dtrain" style="border-color:#F1D3D6"><b>${orig.archived ? 'Restore' : 'Archive'} ${esc(firstName(w.name))}</b><div class="tiny muted" style="margin:3px 0 10px">${orig.archived ? 'Puts them back in lists, events and the dashboard.' : 'For people who’ve stopped serving. They’re removed from lists, events and the dashboard, but their training records and certificates are kept for the retention period.'}</div>
-        <button class="btn ${orig.archived ? 'teal' : 'ghost'} xs" id="darch" style="${orig.archived ? '' : 'color:var(--red-600)'}">${orig.archived ? 'Restore' : 'Archive'}</button></div>`,
+        <div class="row" style="gap:6px"><button class="btn ghost xs" data-copy="${orig.token}">${ICON.link} Copy sign-in link</button><button class="btn ghost xs" id="dnewtok">Generate new link</button><a class="btn ghost xs" href="#/preview/${orig.id}">Preview as ${esc(firstName(w.name))}</a></div></div>
+      ${orig.archived ? `<div class="dtrain" style="border-color:#BFE3DC"><b>Reactivate ${esc(firstName(w.name))}</b><div class="tiny muted" style="margin:3px 0 10px">Archived ${fmtDate(orig.archivedAt)}. Reactivating lets them sign in and get reminders again. Records from the last ${retentionYears()} years are kept; older ones are removed.</div><button class="btn teal xs" id="dreact">Reactivate…</button></div>`
+        : `<div class="dtrain" style="border-color:#F1D3D6"><b>Archive ${esc(firstName(w.name))}</b><div class="tiny muted" style="margin:3px 0 10px">For people who’ve stopped serving. They can’t sign in, won’t get reminders and drop out of lists — but their records are kept for ${retentionYears()} years for safeguarding audits.</div><button class="btn ghost xs" id="darch" style="color:var(--red-600)">Archive</button></div>`}
+      <div class="dtrain" style="border-color:#F1D3D6"><b>Delete permanently</b><div class="tiny muted" style="margin:3px 0 10px">Only for erasure requests or mistakes. Erases everything, including their audit trail.</div><button class="btn ghost xs" id="ddel" style="color:var(--red-600)">Delete…</button></div>`,
   };
   const head = () => `<div class="person" style="gap:12px">${w.name ? `<span class="avatar" style="width:44px;height:44px;font-size:16px;background:${avatarColour(w.name)}">${initials(w.name)}</span>` : ''}<div><div class="eyebrow">${isNew ? 'New person' : 'Edit person'}</div><h2 style="margin-top:2px">${esc(w.name || 'Add someone')}</h2></div></div>`;
   // shell is built once — switching sections only swaps the body, so nothing re-animates
@@ -291,7 +319,9 @@ function personPanel(p, section = 'details') {
     $$('[data-dcv]', d).forEach(b => b.onclick = wrap(() => revokeCert(C(b.dataset.dcv))));
     $$('[data-dun]', d).forEach(b => b.onclick = () => { const x = pw(b.dataset.dun), pr = prog(orig.id, x.id); x.steps.filter(s => s.type === 'quiz' && quizLocked(pr, s)).forEach(s => pr.steps[s.id].attempts.forEach(a => { if (!a.passed) a.voided = true; })); audit({ actor: 'admin', action: 'quiz_unlocked', personId: orig.id, pathwayId: x.id, version: x.version, detail: { name: orig.name, note: 'Reopened from edit panel' } }); toast('Quiz reopened'); route(); personPanel(orig, 'training'); });
     $('#dnewtok', d) && ($('#dnewtok', d).onclick = e => { if (!confirmInline(e.currentTarget, 'Click again — old link stops working')) return; orig.token = uid('inv-'); audit({ actor: 'admin', action: 'person_updated', personId: orig.id, detail: { name: orig.name, changes: ['invite link regenerated'] } }); toast('New invite link created'); personPanel(orig, 'account'); route(); });
-    $('#darch', d) && ($('#darch', d).onclick = e => { if (!orig.archived && !confirmInline(e.currentTarget, 'Click again to archive')) return; orig.archived = !orig.archived; audit({ actor: 'admin', action: orig.archived ? 'person_archived' : 'person_restored', personId: orig.id, detail: { name: orig.name } }); toast(orig.archived ? 'Archived — records kept' : 'Restored'); closeDrawer(); route(); });
+    $('#darch', d) && ($('#darch', d).onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to archive')) return; archiveVolunteer(orig); toast(`${orig.name} archived — records kept`); closeDrawer(); route(); });
+    $('#dreact', d) && ($('#dreact', d).onclick = () => { closeDrawer(); confirmReactivate(orig); });
+    $('#ddel', d) && ($('#ddel', d).onclick = () => { closeDrawer(); confirmDelete(orig); });
     setTimeout(() => $('.dbody input, .dbody textarea', d)?.focus(), 60);
   };
   const save = async () => {
@@ -318,31 +348,6 @@ function watchModalClose(cb) { const t = setInterval(() => { if (!$('#scrim')) {
 
 const personForm = p => personPanel(p);
 function confirmInline(btn, msg) { if (btn.dataset.armed) return true; btn.dataset.armed = 1; const t = btn.innerHTML; btn.innerHTML = msg; setTimeout(() => { if (btn.isConnected) { btn.innerHTML = t; delete btn.dataset.armed; } }, 3000); return false; }
-function importPeople() {
-  const s = modal(`<header><h2>Import people from CSV</h2><button class="iconbtn" data-close>${ICON.x}</button></header>
-  <div class="body"><p class="muted small">Columns: <code>name, email, roles, events</code>. Separate multiple roles or events with <code>;</code>. Event names must match an existing event. Existing emails are updated.</p>
-  <div class="dropzone" id="dz"><b>Drop a CSV here</b> or click to choose<input type="file" accept=".csv,text/csv" hidden id="fi"></div>
-  <p class="tiny muted" style="margin-top:10px">Example:<br><code>name,email,roles,events<br>Sam Irwin,sam@example.com,Camp Leader,P7 Camp — Summer 2027</code></p></div>`);
-  const dz = $('#dz', s), fi = $('#fi', s);
-  dz.onclick = () => fi.click(); dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); }; dz.ondragleave = () => dz.classList.remove('over');
-  const handle = async f => {
-    const rows = parseCSV(await f.text()); const head = rows.shift().map(h => h.trim().toLowerCase());
-    let added = 0, updated = 0;
-    rows.filter(r => r.some(Boolean)).forEach(r => {
-      const o = Object.fromEntries(head.map((h, i) => [h, (r[i] || '').trim()])); if (!o.email) return;
-      const roles = (o.roles || '').split(';').map(x => x.trim()).filter(Boolean);
-      roles.forEach(x => { if (!db.roles.includes(x)) db.roles.push(x); });
-      const eventIds = (o.events || '').split(';').map(n => db.events.find(e => e.name.toLowerCase() === n.trim().toLowerCase())?.id).filter(Boolean);
-      const ex = db.people.find(p => p.email.toLowerCase() === o.email.toLowerCase());
-      if (ex) { Object.assign(ex, { name: o.name || ex.name, roles: roles.length ? roles : ex.roles, eventIds: eventIds.length ? eventIds : ex.eventIds }); updated++; }
-      else { db.people.push({ id: uid('u_'), token: uid('inv-'), createdAt: now(), name: o.name, email: o.email, roles, eventIds }); added++; }
-    });
-    audit({ actor: 'admin', action: 'data_imported', detail: { kind: 'people CSV', added, updated } });
-    closeModal(); toast(`${added} added, ${updated} updated`); route();
-  };
-  dz.ondrop = e => { e.preventDefault(); e.dataTransfer.files[0] && handle(e.dataTransfer.files[0]); };
-  fi.onchange = () => fi.files[0] && handle(fi.files[0]);
-}
 function parseCSV(t) {
   const rows = []; let row = [], f = '', q = false;
   for (let i = 0; i < t.length; i++) {
@@ -657,7 +662,7 @@ function renderPersonRecord(id) {
   };
   adminShell('people', `<div class="printable">` + pageHead(`<a href="#/admin/people">People</a> / Record`, `<span class="person" style="gap:14px">${avatar(p).replace('avatar"', 'avatar" style="width:48px;height:48px;font-size:17px;background:' + avatarColour(p.name) + '"')}${esc(p.name)}</span>`,
     `${esc(p.email)}${p.phone ? ` · ${esc(p.phone)}` : ''}${p.org ? ` · ${esc(p.org)}` : ''} · Added ${fmtDate(p.createdAt)}${p.archived ? ' · <b style="color:var(--red-600)">Archived</b>' : ''}<br><span class="typepill t-${typeOf(p)}">${typeOf(p)}</span>${p.accessNI?.status === 'cleared' ? '<span class="tag" style="background:var(--teal-50);color:var(--teal)">AccessNI cleared</span>' : p.accessNI?.status === 'applied' ? '<span class="tag" style="background:var(--amber-50)">AccessNI pending</span>' : ''}${p.roles.map(r => `<span class="tag">${esc(r)}</span>`).join('')}${p.eventIds.map(id => `<span class="tag" style="background:var(--sky-50)">${esc(EventById(id)?.name || '')}</span>`).join('')}`,
-    `<a class="btn ghost sm" href="#/admin/people" data-back="#/admin/people">${ICON.back} Back</a><button class="btn ghost sm" data-copy="${p.token}">${ICON.link} Invite link</button><a class="btn ghost sm" href="#/i/${p.token}">Open as volunteer</a><button class="btn ghost sm" id="prp">${ICON.print} Print record</button><button class="btn ghost sm" id="psend">✉️ Send reminder</button><a class="btn ghost sm" href="#/inbox/${p.token}">📬 Inbox</a><button class="btn red sm" id="pe">Edit</button>`) + `
+    `<a class="btn ghost sm" href="#/admin/people" data-back="#/admin/people">${ICON.back} Back</a><button class="btn ghost sm" data-copy="${p.token}">${ICON.link} Invite link</button><a class="btn ghost sm" href="#/preview/${p.id}">Preview as volunteer</a><button class="btn ghost sm" id="prp">${ICON.print} Print record</button><button class="btn ghost sm" id="psend">✉️ Send reminder</button><a class="btn ghost sm" href="#/inbox/${p.token}">📬 Inbox</a><button class="btn red sm" id="pe">Edit</button>`) + `
     <div class="tabs noprint" role="tablist">${tabs.map(([k, l, n]) => `<button role="tab" aria-selected="${recordTab === k}" class="${recordTab === k ? 'on' : ''}" data-tab="${k}">${l} <span>${n}</span>${k === 'training' && lockedPws.length ? '<i class="tabdot"></i>' : ''}</button>`).join('')}</div>
     <div id="tabbody" class="fadein">${body[recordTab]()}</div></div>`);
   bindCopy();
@@ -1053,7 +1058,7 @@ function renderSettings() {
   };
   $('#ss2').onclick = () => { st.publicUrl = $('[data-s=publicUrl]').value.trim(); persist(); toast('Address saved'); };
   $('#democtl').onchange = e => { st.demoControls = e.target.checked; persist(); toast(e.target.checked ? 'Demo controls on' : 'Demo controls off'); };
-  $('#reset').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to reset')) return; Store.clear(); seed(); draft = null; toast('Demo data reset'); go('#/admin'); };
+  $('#reset').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to reset')) return; Store.clear(); seed(); draft = null; Session.set('admin', { email: ADMIN_DEMO.email, at: now() }); toast('Demo data reset'); go('#/admin'); };
   $('#restore').onclick = () => { const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json'; fi.onchange = async () => { try { const d = JSON.parse(await fi.files[0].text()); if (!d.pathways || !d.people) throw 0; db = d; audit({ actor: 'admin', action: 'data_imported', detail: { kind: 'backup' } }); toast('Backup restored'); route(); } catch { toast('That file isn’t a valid backup'); } }; fi.click(); };
   bindExports();
 }
@@ -1104,6 +1109,7 @@ function dueFor(rule) {
 }
 function sendEmails(items, { subject, body, source, ruleId = null }) {
   db.outbox ||= []; const at = now();
+  items = items.filter(({ p }) => p && !p.archived);   // archived volunteers are never emailed
   items.forEach(({ p, ctx = {}, key }) => {
     const sj = mergeText(subject, p, ctx), bd = mergeText(body, p, ctx);
     db.outbox.push({ id: uid('m_'), at, to: p.email, personId: p.id, subject: sj, body: bd, source, ruleId, key: key || null, by: source === 'automatic' ? 'system' : db.settings.adminName });
@@ -1132,7 +1138,7 @@ function renderInbox(token, mid) {
   const read = (db.readMail ||= {});
   if (cur) { read[cur.id] = 1; persist(); }
   app().innerHTML = `<div class="inbox"><header class="ib-top"><div class="row" style="gap:12px">${ICON.mail.replace('<svg', '<svg width="22" height="22"')}<b>Inbox</b><span class="muted small">${esc(p.email)}</span></div>
-      <div class="row" style="gap:8px"><span class="tag" style="background:var(--amber-50)">Demo inbox — not a real mailbox</span><a class="btn ghost sm" href="#/admin/people/${p.id}" data-back="#/admin/people/${p.id}">${ICON.back} Back</a></div></header>
+      <div class="row" style="gap:8px"><span class="tag" style="background:var(--amber-50)">Demo inbox — not a real mailbox</span><a class="btn ghost sm" href="${isAdmin() ? '#/admin/people/' + p.id : '#/me'}" data-back="${isAdmin() ? '#/admin/people/' + p.id : '#/me'}">${ICON.back} Back</a></div></header>
     <div class="ib-body"><aside class="ib-list">${mails.map(m => `<a class="ib-item ${cur && m.id === cur.id ? 'on' : ''} ${read[m.id] ? '' : 'unread'}" href="#/inbox/${p.token}/${m.id}"><div class="row between"><b>Scripture Union NI</b><span class="tiny muted">${fmtDate(m.at)}</span></div><div class="ib-sub">${esc(m.subject)}</div><div class="ib-snip">${esc(m.body.replace(/\s+/g, ' ').slice(0, 90))}…</div></a>`).join('') || '<div class="empty">No emails yet.<br><span class="small">Send a reminder from the admin area to see one arrive.</span></div>'}</aside>
       <main class="ib-read">${cur ? `<div class="ib-meta"><h2>${esc(cur.subject)}</h2><div class="small muted">From <b>Scripture Union NI</b> &lt;training@suni.co.uk&gt; · to ${esc(p.name)} · ${fmtDT(cur.at)}</div></div>${emailHTML(cur.subject, cur.body, p)}` : ''}</main></div></div>` + demobar('');
   const btn = $('.ib-read .em-btn'); if (btn) { btn.removeAttribute('target'); btn.setAttribute('href', '#/i/' + p.token); }
@@ -1247,8 +1253,238 @@ function editRule(r) {
     r.subject = $('#rsub', s).value.trim(); r.body = $('#rbody', s).value; audit({ actor: 'admin', action: 'settings_saved', detail: { reminder: r.name, days: r.days, subject: r.subject } }); closeModal(); toast('Reminder saved'); renderEmails(); };
 }
 
+/* =====================================================================
+   VOLUNTEER LIFECYCLE  ·  RETENTION  ·  IMPORT / EXPORT
+   ===================================================================== */
+const YEAR = 365.25 * DAY;
+const retentionYears = () => db.settings.retentionYears || 5;
+const retentionCutoff = () => new Date(Date.now() - retentionYears() * YEAR).toISOString();
+function signOutIfCurrent(p) { const s = Session.get('vol'); if (s && s.volunteer_id === p.id) Session.clear('vol'); }
+
+function archiveVolunteer(p, reason = '') {
+  p.archived = true; p.archivedAt = now(); signOutIfCurrent(p);
+  audit({ actor: 'admin', action: 'volunteer_archived', personId: p.id, detail: { name: p.name, reason } });
+}
+/* remove one volunteer's training records older than the retention period */
+function purgeOldRecords(personId) {
+  const cut = retentionCutoff(); const old = db.completions.filter(c => c.personId === personId && c.completedAt < cut);
+  if (old.length) db.completions = db.completions.filter(c => !old.includes(c));
+  return old;
+}
+function reactivationPreview(p) {
+  const cut = retentionCutoff(); const mine = db.completions.filter(c => c.personId === p.id);
+  return { keep: mine.filter(c => c.completedAt >= cut), purge: mine.filter(c => c.completedAt < cut) };
+}
+function reactivateVolunteer(p, source = 'admin') {
+  const removed = purgeOldRecords(p.id);
+  p.archived = false; p.archivedAt = null;
+  audit({ actor: 'admin', action: 'volunteer_reactivated', personId: p.id, detail: { name: p.name, source, records_kept: db.completions.filter(c => c.personId === p.id).length, records_removed: removed.length, modules_removed: removed.map(c => c.pathwayTitle) } });
+  return removed;
+}
+/* permanent erasure: volunteer row, training records, progress, emails, links and their audit trail */
+function deleteVolunteer(p, reason = 'Admin request', actor = 'admin') {
+  const recs = db.completions.filter(c => c.personId === p.id).length, logs = db.audit.filter(a => a.personId === p.id).length;
+  db.people = db.people.filter(x => x !== p);
+  db.completions = db.completions.filter(c => c.personId !== p.id);
+  delete db.progress[p.id];
+  db.outbox = (db.outbox || []).filter(m => m.personId !== p.id);
+  db.magicLinks = (db.magicLinks || []).filter(l => l.volunteer_id !== p.id);
+  db.audit = db.audit.filter(a => a.personId !== p.id);
+  signOutIfCurrent(p);
+  // the deletion itself is logged, without any personal data
+  audit({ actor, action: 'volunteer_deleted', detail: { ref: 'vol-' + hash(p.id), records_deleted: recs, audit_entries_deleted: logs, reason } });
+  return { recs, logs };
+}
+function confirmReactivate(p, after) {
+  const { keep, purge } = reactivationPreview(p);
+  const s = modal(`<header><div><div class="eyebrow">Reactivate volunteer</div><h2 style="margin-top:4px">${esc(p.name)}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body"><p>${esc(firstName(p.name))} will be able to sign in again and will get training reminders. Archived ${fmtDate(p.archivedAt)}.</p>
+      <div class="lifebox ok"><b>${keep.length} training record${keep.length === 1 ? '' : 's'} kept</b> <span class="small muted">— completed in the last ${retentionYears()} years</span>${keep.map(c => `<div class="small">✓ ${esc(c.pathwayTitle)} · ${fmtDate(c.completedAt)}${new Date(c.expiresAt) < new Date() ? ' <span class="muted">(expired — will need renewing)</span>' : ''}</div>`).join('')}</div>
+      ${purge.length ? `<div class="lifebox bad"><b>${purge.length} older record${purge.length === 1 ? '' : 's'} removed</b> <span class="small muted">— over ${retentionYears()} years old (UK GDPR storage limitation)</span>${purge.map(c => `<div class="small">✗ ${esc(c.pathwayTitle)} · ${fmtDate(c.completedAt)}</div>`).join('')}<div class="tiny muted" style="margin-top:6px">Those modules will show as incomplete so ${esc(firstName(p.name))} knows to renew them.</div></div>` : ''}</div>
+    <footer><button class="btn ghost" data-close>Cancel</button><button class="btn teal" id="rgo">Reactivate ${esc(firstName(p.name))}</button></footer>`);
+  $('#rgo', s).onclick = () => { const removed = reactivateVolunteer(p); closeModal(); toast(`${p.name} reactivated${removed.length ? ` · ${removed.length} old record${removed.length === 1 ? '' : 's'} removed` : ''}`); after ? after() : route(); };
+}
+function confirmDelete(p, after) {
+  const recs = db.completions.filter(c => c.personId === p.id).length, logs = db.audit.filter(a => a.personId === p.id).length;
+  const s = modal(`<header><div><div class="eyebrow" style="color:var(--red)">Permanent deletion</div><h2 style="margin-top:4px">Delete ${esc(p.name)}?</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body"><div class="notice bad">${ICON.info}<div><b>This can’t be undone.</b> It permanently erases ${esc(firstName(p.name))}’s volunteer record, <b>${recs} training record${recs === 1 ? '' : 's'}</b>, quiz attempts, emails and <b>their audit trail (${logs} entr${logs === 1 ? 'y' : 'ies'})</b>. Only an anonymous “volunteer deleted” entry is kept.</div></div>
+      <p class="small muted">If they’ve simply stopped serving, <b>archive</b> them instead — that keeps their records for the ${retentionYears()}-year safeguarding audit, and they’re deleted automatically afterwards.</p>
+      <div class="field"><label class="f">Type their email address to confirm</label><input class="input" id="dconf" placeholder="${esc(p.email)}" autocomplete="off"></div>
+      <div class="field"><label class="f">Reason</label><select class="input" id="dreason"><option>Erasure request from the volunteer</option><option>Added by mistake / duplicate</option><option>Other</option></select></div></div>
+    <footer><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="dgo" disabled>Delete permanently</button></footer>`);
+  $('#dconf', s).oninput = e => { $('#dgo', s).disabled = e.target.value.trim().toLowerCase() !== p.email.toLowerCase(); };
+  $('#dgo', s).onclick = () => { const r = deleteVolunteer(p, $('#dreason', s).value); closeModal(); toast(`${p.name} deleted · ${r.recs} records and ${r.logs} audit entries erased`); after ? after() : go('#/admin/people'); };
+}
+
+/* ---------- rolling 5-year cleanup (UK GDPR storage limitation) ---------- */
+function retentionDue() {
+  const cut = retentionCutoff();
+  const vols = db.people.filter(p => p.archived && p.archivedAt && p.archivedAt < cut);
+  const gone = new Set(vols.map(p => p.id));
+  const records = db.completions.filter(c => c.completedAt < cut && !gone.has(c.personId));
+  const logs = db.audit.filter(a => a.at < cut && !gone.has(a.personId));
+  return { cut, vols, records, logs };
+}
+function runCleanup(source = 'manual') {
+  const d = retentionDue();
+  d.vols.forEach(p => deleteVolunteer(p, `Archived over ${retentionYears()} years ago`, 'system'));
+  const rset = new Set(d.records.map(c => c.id)); db.completions = db.completions.filter(c => !rset.has(c.id));
+  const lset = new Set(d.logs.map(a => a.id)); db.audit = db.audit.filter(a => !lset.has(a.id));
+  db.settings.lastCleanup = new Date().toISOString().slice(0, 10);
+  audit({ actor: 'system', action: 'retention_cleanup', detail: { source, cutoff: d.cut.slice(0, 10), volunteers_deleted: d.vols.length, records_removed: d.records.length, audit_entries_removed: d.logs.length } });
+  return { vols: d.vols.length, records: d.records.length, logs: d.logs.length };
+}
+/* simulated daily job — runs once per day when the app opens */
+function dailyCleanup() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (!db.settings.autoCleanup || db.settings.lastCleanup === today) return;
+  const r = runCleanup('automatic daily job');
+  if (r.vols + r.records + r.logs) setTimeout(() => toast(`Daily data cleanup: ${r.records} old record${r.records === 1 ? '' : 's'} and ${r.vols} archived volunteer${r.vols === 1 ? '' : 's'} removed`), 800);
+}
+
+/* ---------- audit report (CSV) ---------- */
+function exportAuditReport() {
+  const rows = [['volunteer_id', 'first_name', 'last_name', 'email', 'status', 'created_at', 'archived_at', 'module_name', 'completed_at', 'expires_at', 'certificate_id', 'record_status']];
+  [...db.people].sort((a, b) => (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name)).forEach(p => {
+    const recs = db.completions.filter(c => c.personId === p.id).sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+    const base = [p.id, p.first_name, p.last_name, p.email, p.archived ? 'archived' : 'active', p.createdAt, p.archivedAt || ''];
+    if (!recs.length) rows.push([...base, '', '', '', '', 'no training records']);
+    recs.forEach(c => rows.push([...base, c.pathwayTitle, c.completedAt, c.expiresAt.startsWith('9999') ? '' : c.expiresAt, c.id, c.revoked ? (c.revoked.replacedBy ? 'replaced' : 'revoked') : new Date(c.expiresAt) > new Date() ? 'valid' : 'expired']));
+  });
+  download(`SUNI-safeguarding-audit-report-${stamp()}.csv`, csv(rows));
+  audit({ actor: 'admin', action: 'report_exported', detail: { report: 'Audit report (CSV)', rows: rows.length - 1 } });
+  toast(`Audit report downloaded (${rows.length - 1} rows)`);
+}
+
+/* ---------- CSV bulk import (first_name, last_name, email) ---------- */
+const SAMPLE_IMPORT = () => ['first_name,last_name,email', 'Sam,Irwin,sam.irwin@example.com', 'Niamh,Doherty,niamh.doherty@example.com', `Hannah,Doyle-Reid,hannah.doyle@example.com`, 'Laura,Kerr,laura.kerr@example.com', 'Ben,Hutchinson,ben.hutchinson@example', ',Smith,j.smith@example.com', 'Sam,Irwin,SAM.IRWIN@example.com'].join('\n');
+function importPeople() {
+  const s = modal(`<header><div><div class="eyebrow">Bulk import</div><h2 style="margin-top:4px">Import volunteers from CSV</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  <div class="body" id="imbody"><p class="muted small" style="margin-top:0">Columns: <code>first_name, last_name, email</code> (optional: <code>roles</code>, <code>events</code> — separate several with <code>;</code>). Existing emails are updated — their training history is never touched. Archived volunteers in the file can be reactivated.</p>
+    <div class="dropzone" id="dz"><b>Drop a CSV file here</b> or click to choose<input type="file" accept=".csv,text/csv" hidden id="fi"></div>
+    <div class="row" style="margin-top:12px;gap:8px"><button class="btn ghost xs" id="tpl">${ICON.dl} Blank template</button><button class="btn ghost xs" id="smp">${ICON.dl} Sample file</button><button class="btn soft xs" id="smpgo">Try the sample now</button></div></div>`, 'wide');
+  const dz = $('#dz', s), fi = $('#fi', s);
+  dz.onclick = () => fi.click(); dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); }; dz.ondragleave = () => dz.classList.remove('over');
+  dz.ondrop = e => { e.preventDefault(); e.dataTransfer.files[0] && e.dataTransfer.files[0].text().then(t => previewImport(t, e.dataTransfer.files[0].name)); };
+  fi.onchange = () => fi.files[0] && fi.files[0].text().then(t => previewImport(t, fi.files[0].name));
+  $('#tpl', s).onclick = () => download('volunteer-import-template.csv', 'first_name,last_name,email\n');
+  $('#smp', s).onclick = () => download('volunteer-import-sample.csv', SAMPLE_IMPORT());
+  $('#smpgo', s).onclick = () => previewImport(SAMPLE_IMPORT(), 'volunteer-import-sample.csv');
+}
+function analyseImport(text) {
+  const rows = parseCSV(text.replace(/^﻿/, '')).filter(r => r.some(c => c.trim()));
+  if (!rows.length) return { error: 'The file is empty.' };
+  const head = rows.shift().map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  const need = ['first_name', 'last_name', 'email'].filter(c => !head.includes(c));
+  if (need.length) return { error: `Missing column${need.length > 1 ? 's' : ''}: ${need.join(', ')}. The first row must be the column names.` };
+  const seen = new Set(), out = { create: [], update: [], same: [], reactivate: [], invalid: [] };
+  rows.forEach((r, i) => {
+    const o = Object.fromEntries(head.map((h, k) => [h, (r[k] || '').trim()])); const line = i + 2;
+    const email = o.email.toLowerCase();
+    if (!o.first_name || !o.last_name) return out.invalid.push({ line, o, why: 'First and last name are both required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return out.invalid.push({ line, o, why: 'Not a valid email address' });
+    if (seen.has(email)) return out.invalid.push({ line, o, why: 'Duplicate of an earlier row in this file' });
+    seen.add(email);
+    const roles = (o.roles || '').split(';').map(x => x.trim()).filter(Boolean);
+    const eventIds = (o.events || '').split(';').map(n => db.events.find(e => e.name.toLowerCase() === n.trim().toLowerCase())?.id).filter(Boolean);
+    const ex = db.people.find(p => p.email.toLowerCase() === email);
+    const row = { line, o: { ...o, email }, roles, eventIds, ex };
+    if (!ex) out.create.push(row);
+    else if (ex.archived) out.reactivate.push(row);
+    else if (ex.first_name !== o.first_name || ex.last_name !== o.last_name || (roles.length && roles.join() !== ex.roles.join()) || eventIds.some(id => !ex.eventIds.includes(id))) out.update.push(row);
+    else out.same.push(row);
+  });
+  return out;
+}
+function previewImport(text, fname) {
+  const a = analyseImport(text); const body = $('#imbody'); if (!body) return;
+  if (a.error) { toast(a.error); body.insertAdjacentHTML('afterbegin', `<div class="notice bad small" style="margin-bottom:12px">${ICON.info}<div>${esc(a.error)}</div></div>`); return; }
+  const sec = (title, list, render, cls = '') => list.length ? `<div class="imsec ${cls}"><div class="imh"><b>${title}</b><span class="tag">${list.length}</span></div>${list.slice(0, 50).map(render).join('')}${list.length > 50 ? `<div class="tiny muted">…and ${list.length - 50} more</div>` : ''}</div>` : '';
+  const nm = r => `${esc(r.o.first_name)} ${esc(r.o.last_name)} <span class="muted">· ${esc(r.o.email)}</span>`;
+  body.innerHTML = `<div class="row between" style="margin-bottom:12px"><span class="small"><b>${esc(fname)}</b> · ${a.create.length + a.update.length + a.same.length + a.reactivate.length + a.invalid.length} rows checked</span><button class="btn ghost xs" id="imback">Choose a different file</button></div>
+    <div class="imgrid">${[['New', a.create.length, 'var(--teal)'], ['Updates', a.update.length, 'var(--sky)'], ['Archived — can reactivate', a.reactivate.length, 'var(--amber)'], ['Unchanged', a.same.length, '#CFC8C0'], ['Problems', a.invalid.length, 'var(--red)']].map(([l, n, c]) => `<div style="--c:${c}"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
+    ${sec('New volunteers', a.create, r => `<div class="imrow">＋ ${nm(r)}</div>`)}
+    ${sec('Updates to existing volunteers', a.update, r => `<div class="imrow">✎ ${nm(r)}${r.ex.first_name !== r.o.first_name || r.ex.last_name !== r.o.last_name ? ` <span class="small muted">— name was “${esc(r.ex.name)}”</span>` : ''} <span class="tiny muted">· training history kept</span></div>`)}
+    ${sec('Archived volunteers in this file', a.reactivate, r => { const pv = reactivationPreview(r.ex); return `<label class="imrow imre"><input type="checkbox" data-re="${r.ex.id}" checked><span>${nm(r)}<br><span class="tiny muted">Archived ${fmtDate(r.ex.archivedAt)} · ${pv.keep.length} record${pv.keep.length === 1 ? '' : 's'} kept${pv.purge.length ? `, ${pv.purge.length} older than ${retentionYears()} years will be removed` : ''}</span></span><span class="tag">Reactivate</span></label>`; }, 'warn')}
+    ${sec('Rows that will be skipped', a.invalid, r => `<div class="imrow">✗ Row ${r.line}: ${esc([r.o.first_name, r.o.last_name].filter(Boolean).join(' ') || '(no name)')} <span class="muted">· ${esc(r.o.email || 'no email')}</span> — <span style="color:var(--red-600)">${esc(r.why)}</span></div>`, 'bad')}
+    ${a.same.length ? `<p class="tiny muted">${a.same.length} row${a.same.length === 1 ? ' matches' : 's match'} existing volunteers exactly — nothing to change.</p>` : ''}`;
+  const foot = $('#scrim footer') || (() => { const f = document.createElement('footer'); $('#scrim .modal').appendChild(f); return f; })();
+  const count = () => a.create.length + a.update.length + $$('[data-re]:checked').length;
+  foot.innerHTML = `<button class="btn ghost" data-close>Cancel</button><button class="btn red" id="imgo">Import ${count()} change${count() === 1 ? '' : 's'}</button>`;
+  $$('[data-re]').forEach(c => c.onchange = () => { $('#imgo').textContent = `Import ${count()} change${count() === 1 ? '' : 's'}`; });
+  $('#imback').onclick = () => { closeModal(); importPeople(); };
+  $('#imgo').onclick = () => {
+    const react = new Set($$('[data-re]:checked').map(c => c.dataset.re)); let created = 0, updated = 0, reactivated = 0;
+    a.create.forEach(r => { const p = setName({ id: uid('u_'), token: uid('inv-'), createdAt: now(), email: r.o.email, type: 'volunteer', roles: r.roles, eventIds: r.eventIds, org: '', notes: '', accessNI: { status: 'not_requested', date: '' } }, r.o.first_name, r.o.last_name);
+      db.people.push(p); created++; audit({ actor: 'admin', action: 'volunteer_created', personId: p.id, detail: { name: p.name, source: 'CSV import' } }); if (requiredPathwaysFor(p).length) autoEmail('assigned', p, { key: 'import' }); });
+    const upd = r => { const before = r.ex.name; setName(r.ex, r.o.first_name, r.o.last_name); if (r.roles.length) r.ex.roles = r.roles; r.eventIds.forEach(id => r.ex.eventIds.includes(id) || r.ex.eventIds.push(id));
+      audit({ actor: 'admin', action: 'volunteer_updated', personId: r.ex.id, detail: { name: r.ex.name, changes: before !== r.ex.name ? [`name: ${before} → ${r.ex.name}`] : ['roles/events'], source: 'CSV import' } }); };
+    a.update.forEach(r => { upd(r); updated++; });
+    a.reactivate.filter(r => react.has(r.ex.id)).forEach(r => { upd(r); reactivateVolunteer(r.ex, 'CSV import'); reactivated++; });
+    audit({ actor: 'admin', action: 'data_imported', detail: { kind: 'Volunteer CSV', file: fname, created, updated, reactivated, skipped: a.invalid.length } });
+    closeModal(); toast(`Imported: ${created} new · ${updated} updated · ${reactivated} reactivated${a.invalid.length ? ` · ${a.invalid.length} skipped` : ''}`); route();
+  };
+}
+
+/* ---------- send reminders (active volunteers with incomplete modules only) ---------- */
+function openSendReminders() {
+  const incompleteOf = p => requiredPathwaysFor(p).filter(pw => ['none', 'progress', 'expired'].includes(statusOf(p, pw).key));
+  const active = live(), archived = db.people.filter(p => p.archived);
+  const targets = active.filter(p => incompleteOf(p).length);
+  const locked = active.filter(p => !incompleteOf(p).length && requiredPathwaysFor(p).some(pw => statusOf(p, pw).key === 'locked')).length;
+  composeEmail(targets, { title: 'Send reminders', ruleId: 'r-notstarted',
+    note: `<b>${targets.length}</b> active volunteers have incomplete training. Not included: <b>${archived.length} archived</b> (never emailed), ${active.length - targets.length - locked} up to date${locked ? `, ${locked} waiting for a follow-up chat` : ''}.`,
+    ctxFor: p => ({ training: incompleteOf(p).map(pw => pw.title).join(' and ') }) });
+}
+
+/* ---------- Data & privacy page ---------- */
+function renderPrivacy() {
+  const d = retentionDue(); const yrs = retentionYears();
+  const runs = db.audit.filter(a => a.action === 'retention_cleanup').slice(-6).reverse();
+  const tbl = Object.entries({ volunteers: db.people.length, training_records: db.completions.length, audit_logs: db.audit.length });
+  adminShell('privacy', pageHead('Data & privacy', 'Data, retention & admin tools', `Records are kept for ${yrs} years under our safeguarding obligations, then removed automatically (UK GDPR storage limitation).`,
+    `<button class="btn ghost sm" id="xrep">${ICON.dl} Download audit report (CSV)</button><button class="btn ghost sm" id="ximp">Import volunteers (CSV)</button>`) + `
+    <div class="grid g2" style="align-items:start">
+      <div class="card"><div class="row between"><h3>Rolling ${yrs}-year cleanup</h3><label class="row small" style="gap:8px;cursor:pointer"><span class="muted">Run daily</span><label class="switch"><input type="checkbox" id="autoc" ${db.settings.autoCleanup ? 'checked' : ''}><span></span></label></label></div>
+        <p class="small muted" style="margin:6px 0 14px">Anything older than <b>${fmtDate(d.cut)}</b> is removed. Last run: <b>${db.settings.lastCleanup ? fmtDate(db.settings.lastCleanup) : 'never'}</b>.</p>
+        <div class="imgrid three">${[['Training records over ' + yrs + ' years old', d.records.length, 'var(--amber)'], ['Volunteers archived over ' + yrs + ' years ago', d.vols.length, 'var(--red)'], ['Audit entries over ' + yrs + ' years old', d.logs.length, 'var(--sky)']].map(([l, n, c]) => `<div style="--c:${c}"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
+        ${d.records.length || d.vols.length ? `<details class="duelist"><summary>See what will be removed</summary>
+          ${d.vols.map(p => `<div class="imrow">🗑 <b>${esc(p.name)}</b> <span class="muted">· archived ${fmtDate(p.archivedAt)} — whole record deleted</span></div>`).join('')}
+          ${d.records.map(c => `<div class="imrow">✗ ${esc(Person(c.personId)?.name || '')} <span class="muted">· ${esc(c.pathwayTitle)} completed ${fmtDate(c.completedAt)}</span></div>`).join('')}</details>` : ''}
+        <button class="btn red" id="runc" style="margin-top:14px" ${d.records.length + d.vols.length + d.logs.length ? '' : 'disabled'}>Run cleanup now</button>
+        ${runs.length ? `<h4 style="margin:18px 0 6px;font-size:14px">Recent runs</h4><ul class="timeline">${runs.map(a => `<li><span class="when">${fmtDT(a.at)}</span><span class="small">${esc(a.detail.source)} · ${a.detail.records_removed} records, ${a.detail.volunteers_deleted} volunteers, ${a.detail.audit_entries_removed} audit entries removed</span></li>`).join('')}</ul>` : ''}
+      </div>
+      <div class="stack">
+        <div class="card"><h3 style="margin-bottom:8px">What we keep, and for how long</h3><ul class="small" style="margin:0;padding-left:18px;line-height:1.7">
+          <li>Name, email address and training completion dates — <b>${yrs} years</b> from completion.</li>
+          <li>Archived volunteers can’t sign in or get reminders; their records stay for the ${yrs}-year audit, then are deleted.</li>
+          <li>Reactivating someone keeps anything from the last ${yrs} years; older modules show as needing renewal.</li>
+          <li>Deleting someone erases them and their audit trail immediately (for erasure requests).</li></ul>
+          <p class="tiny muted" style="margin:10px 0 0">Shown to volunteers on the sign-in page. No consent checkbox is used — the lawful basis is our safeguarding obligations.</p></div>
+        <div class="card"><h3 style="margin-bottom:8px">Database</h3><p class="small muted" style="margin-top:0">Mock tables in this browser, shaped exactly like the Cloudflare D1 schema.</p>
+          <div class="dbt">${tbl.map(([t, n]) => `<button data-tbl="${t}"><code>${t}</code><b>${n.toLocaleString('en-GB')}</b><span class="tiny muted">rows · view</span></button>`).join('')}</div></div>
+        <div class="card demo-help"><div class="dt-lbl">Demo tools</div>
+          <div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost xs" id="scale">Load 3,000 volunteers (scale test)</button><button class="btn ghost xs" id="xreset" style="color:var(--red-600)">Reset demo data</button></div>
+          <p class="tiny muted" style="margin:8px 0 0">The scale test adds sample volunteers so you can see search and pagination at full size. Reset puts everything back to the starting sample.</p></div>
+      </div>
+    </div>`);
+  $('#xrep').onclick = exportAuditReport; $('#ximp').onclick = importPeople;
+  $('#autoc').onchange = e => { db.settings.autoCleanup = e.target.checked; audit({ actor: 'admin', action: 'settings_saved', detail: { autoCleanup: e.target.checked } }); toast(e.target.checked ? 'Daily cleanup on' : 'Daily cleanup off'); };
+  $('#runc').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to remove permanently')) return; const r = runCleanup('manual run'); toast(`Cleanup done: ${r.records} record${r.records === 1 ? '' : 's'}, ${r.vols} volunteer${r.vols === 1 ? '' : 's'}, ${r.logs} audit entr${r.logs === 1 ? 'y' : 'ies'} removed`); renderPrivacy(); };
+  $$('[data-tbl]').forEach(b => b.onclick = () => { const rows = Store.table(b.dataset.tbl);
+    modal(`<header><div><div class="eyebrow">Table</div><h2 style="margin-top:4px"><code>${b.dataset.tbl}</code> <span class="muted" style="font-size:16px">${rows.length} rows</span></h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+      <div class="body"><p class="small muted" style="margin-top:0">First 5 rows, exactly as stored — the same shape the D1 Worker would return.</p><pre class="rowdump">${esc(JSON.stringify(rows.slice(-5).reverse(), null, 2))}</pre></div>`, 'wide'); });
+  $('#scale').onclick = e => { if (db.people.length > 2500) { toast('Already at scale'); return; } if (!confirmInline(e.currentTarget, 'Click again — adds ~3,000 people')) return;
+    const t0 = performance.now(); const back = d => new Date(Date.now() - d * DAY).toISOString();
+    seedCrowd(P('p-essentials'), P('p-leaders'), back, null, { scale: Math.ceil((3000 - db.people.length) / 33), lite: true, seed: Date.now() % 1e6 });
+    audit({ actor: 'admin', action: 'data_imported', detail: { kind: 'Scale test', total: db.people.length } });
+    toast(`${db.people.length.toLocaleString('en-GB')} volunteers loaded in ${Math.round(performance.now() - t0)} ms`); renderPrivacy(); };
+  $('#xreset').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to reset everything')) return; Store.clear(); seed(); draft = null; Session.set('admin', { email: ADMIN_DEMO.email, at: now() }); toast('Demo data reset'); go('#/admin'); };
+}
+
 /* ---------- boot ---------- */
 db = Store.load();
 if (!db || db.schema !== 1) seed();
+dailyCleanup();
 addEventListener('hashchange', route);
 route();

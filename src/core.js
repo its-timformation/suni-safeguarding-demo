@@ -46,6 +46,7 @@ const ICON = {
   cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>',
   path: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6H15a3.5 3.5 0 0 1 0 7H9a3.5 3.5 0 0 0 0 7h6.5"/></svg>',
   mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
   log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>',
   cog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   link: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg>',
@@ -62,13 +63,59 @@ const ICON = {
 const LOGO = (h = 40, white = false) => `<img src="${white ? window.SU_LOGO_WHITE : window.SU_LOGO}" alt="Scripture Union Northern Ireland" style="height:${h}px;width:auto;display:block">`;
 const FLAME = (w = 34) => `<img src="${window.SU_FLAME}" alt="" aria-hidden="true" style="width:${w}px;height:auto;display:block">`;
 
-/* ---------- Store (swap point for a real backend) ---------- */
-const KEY = 'suni-safeguarding-demo-v10';
-const Store = {
-  load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } },
-  save(db) { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.warn(e); toast('Could not save — browser storage is full or blocked'); } },
-  clear() { try { localStorage.removeItem(KEY); } catch { } },
+/* =====================================================================
+   MOCK DATABASE  —  same tables and columns as schema.sql (Cloudflare D1)
+   ---------------------------------------------------------------------
+   volunteers        id, first_name, last_name, email (unique), status,
+                     created_at, archived_at, profile (JSON: roles, events…)
+   training_records  id, volunteer_id, module_name, completed_at,
+                     details (JSON: expiry, version, score, certificate…)
+   audit_logs        id, created_at, volunteer_id, actor, action, details
+   app               pathways, events, quiz progress, settings, outbox…
+   Each table is its own localStorage key. To move to D1, replace
+   Store.load/save with calls to a Worker API (see README) — the row
+   shapes below are exactly what the Worker would read and write.
+   ===================================================================== */
+const NS = 'suni-demo-v11';
+const TABLE = { volunteers: NS + ':volunteers', training_records: NS + ':training_records', audit_logs: NS + ':audit_logs', app: NS + ':app' };
+const Rows = {
+  volunteer: p => ({ id: p.id, first_name: p.first_name, last_name: p.last_name, email: String(p.email).toLowerCase(), status: p.archived ? 'archived' : 'active', created_at: p.createdAt, archived_at: p.archived ? (p.archivedAt || now()) : null,
+    profile: { type: p.type, phone: p.phone || '', org: p.org || '', roles: p.roles, event_ids: p.eventIds, notes: p.notes || '', access_ni: p.accessNI || null, invite_token: p.token, featured: !!p.featured } }),
+  person: r => ({ id: r.id, first_name: r.first_name, last_name: r.last_name, name: `${r.first_name} ${r.last_name}`.trim(), email: r.email, archived: r.status === 'archived', archivedAt: r.archived_at, createdAt: r.created_at,
+    type: r.profile?.type, phone: r.profile?.phone, org: r.profile?.org, roles: r.profile?.roles || [], eventIds: r.profile?.event_ids || [], notes: r.profile?.notes, accessNI: r.profile?.access_ni, token: r.profile?.invite_token || uid('inv-'), featured: r.profile?.featured }),
+  record: c => ({ id: c.id, volunteer_id: c.personId, module_name: c.pathwayTitle, completed_at: c.completedAt,
+    details: { pathway_id: c.pathwayId, expires_at: c.expiresAt, version: c.version, score: c.score, attestation_name: c.attestationName, attestation_text: c.attestationText, manual: c.manual || null, revoked: c.revoked || null, edits: c.edits || [], name_on_cert: c.nameOnCert || null, reissued_from: c.reissuedFrom || null } }),
+  completion: r => ({ id: r.id, personId: r.volunteer_id, pathwayTitle: r.module_name, completedAt: r.completed_at, pathwayId: r.details?.pathway_id, expiresAt: r.details?.expires_at, version: r.details?.version, score: r.details?.score, attestationName: r.details?.attestation_name, attestationText: r.details?.attestation_text,
+    manual: r.details?.manual || undefined, revoked: r.details?.revoked || null, edits: r.details?.edits || [], nameOnCert: r.details?.name_on_cert || undefined, reissuedFrom: r.details?.reissued_from || undefined }),
+  auditRow: a => ({ id: a.id, created_at: a.at, volunteer_id: a.personId || null, actor: a.actor, action: a.action, details: { pathway_id: a.pathwayId, version: a.version, step_id: a.stepId, ...(a.detail ? { data: a.detail } : {}) } }),
+  auditEntry: r => ({ id: r.id, at: r.created_at, personId: r.volunteer_id || undefined, actor: r.actor, action: r.action, pathwayId: r.details?.pathway_id, version: r.details?.version, stepId: r.details?.step_id, detail: r.details?.data }),
 };
+const Store = {
+  load() {
+    try {
+      const get = k => JSON.parse(localStorage.getItem(TABLE[k]));
+      const app = get('app'), vols = get('volunteers'), recs = get('training_records'), logs = get('audit_logs');
+      if (!app || !vols || !recs || !logs) return null;
+      return { ...app, people: vols.map(Rows.person), completions: recs.map(Rows.completion), audit: logs.map(Rows.auditEntry) };
+    } catch { return null; }
+  },
+  save(db) {
+    try {
+      const { people, completions, audit, ...app } = db;
+      localStorage.setItem(TABLE.volunteers, JSON.stringify(people.map(Rows.volunteer)));
+      localStorage.setItem(TABLE.training_records, JSON.stringify(completions.map(Rows.record)));
+      localStorage.setItem(TABLE.audit_logs, JSON.stringify(audit.map(Rows.auditRow)));
+      localStorage.setItem(TABLE.app, JSON.stringify(app));
+    } catch (e) { console.warn(e); toast('Could not save — browser storage is full or blocked'); }
+  },
+  clear() { try { Object.keys(localStorage).filter(k => k.startsWith('suni-')).forEach(k => localStorage.removeItem(k)); } catch { } },
+  /* raw table access, used by the admin “Database” view and CSV export */
+  table(name) { try { return JSON.parse(localStorage.getItem(TABLE[name])) || []; } catch { return []; } },
+};
+/* tidy up storage from earlier demo builds */
+try { Object.keys(localStorage).filter(k => /^suni-safeguarding-demo-v\d+$/.test(k)).forEach(k => localStorage.removeItem(k)); } catch { }
+const splitName = n => { const parts = String(n).trim().split(/\s+/); return { first_name: parts.shift() || '', last_name: parts.join(' ') }; };
+function setName(p, first, last) { p.first_name = first.trim(); p.last_name = last.trim(); p.name = `${p.first_name} ${p.last_name}`.trim(); return p; }
 /* Media: IndexedDB for uploaded videos (too big for localStorage) */
 const Media = {
   _db: null, urls: {},
@@ -90,8 +137,8 @@ function seedVideoUrl() {
   return _seedUrl = URL.createObjectURL(new Blob([u8], { type: 'video/mp4' }));
 }
 
-let db;
-function persist() { Store.save(db); }
+let db, persistCount = 0;
+function persist() { persistCount++; Store.save(db); }
 function audit(entry) {
   db.audit.push({ id: uid('a_'), at: now(), ...entry });
   persist();
@@ -99,7 +146,9 @@ function audit(entry) {
 
 /* ---------- domain helpers ---------- */
 const P = id => db.pathways.find(p => p.id === id);
-const Person = id => db.people.find(p => p.id === id);
+/* lookup indexes (rebuilt after each save) so 3,000+ volunteers stay fast */
+let _pIdx = null, _pStamp = '', _cIdx = null, _cStamp = '';
+const Person = id => { const st = db.people.length + ':' + persistCount; if (_pStamp !== st) { _pIdx = new Map(db.people.map(p => [p.id, p])); _pStamp = st; } return _pIdx.get(id); };
 const EventById = id => db.events.find(e => e.id === id);
 const stepRev = s => hash(JSON.stringify({ ...s, rev: undefined }));
 
@@ -110,9 +159,13 @@ function requiredPathwaysFor(person) {
   return [...ids].map(P).filter(Boolean);
 }
 function latestCompletion(personId, pathwayId) {
-  return db.completions.filter(c => c.personId === personId && c.pathwayId === pathwayId && !c.revoked).sort((a, b) => b.completedAt.localeCompare(a.completedAt))[0];
+  const st = db.completions.length + ':' + persistCount;
+  if (_cStamp !== st) { _cIdx = new Map(); for (const c of db.completions) { if (c.revoked) continue; const k = c.personId + '|' + c.pathwayId, cur = _cIdx.get(k); if (!cur || c.completedAt > cur.completedAt) _cIdx.set(k, c); } _cStamp = st; }
+  return _cIdx.get(personId + '|' + pathwayId);
 }
-function prog(personId, pathwayId) {
+const NO_PROGRESS = Object.freeze({ steps: Object.freeze({}), startedAt: null });
+function prog(personId, pathwayId, create = true) {
+  if (!create) return db.progress[personId]?.[pathwayId] || NO_PROGRESS;
   db.progress[personId] ??= {};
   return db.progress[personId][pathwayId] ??= { steps: {}, startedAt: null };
 }
@@ -131,7 +184,7 @@ function statusOf(person, pathway) {
     if (left > soon) return { key: 'complete', label: 'Complete', c };
     if (left > 0) return { key: 'due', label: `Due ${fmtDate(c.expiresAt)}`, c };
   }
-  const pr = prog(person.id, pathway.id);
+  const pr = prog(person.id, pathway.id, false);
   if (pathway.steps.some(s => s.type === 'quiz' && quizLocked(pr, s))) return { key: 'locked', label: 'Needs review', c };
   const any = pathway.steps.some(s => stepDone(pr, s));
   if (any) return { key: 'progress', label: `In progress · ${pctDone(pr, pathway)}%`, c };
@@ -222,7 +275,7 @@ function seed() {
     { id: 'ev-ballycastle', name: 'Ballycastle Mission 2027', date: '2027-07-26', endDate: '2027-08-06', location: 'Ballycastle', requiredPathways: ['p-essentials', 'p-leaders'] },
     { id: 'ev-newcastle', name: 'Newcastle Holiday Club', date: '2027-04-06', endDate: '2027-04-09', location: 'Newcastle, Co. Down', requiredPathways: ['p-essentials'] },
   ];
-  const mk = (name, email, roles, eventIds) => ({ id: uid('u_'), name, email, roles, eventIds, token: uid('inv-'), createdAt: now(), featured: true });
+  const mk = (name, email, roles, eventIds) => setName({ id: uid('u_'), email, roles, eventIds, token: uid('inv-'), createdAt: new Date(Date.now() - 400 * DAY).toISOString(), featured: true, type: 'volunteer', accessNI: { status: 'cleared', date: '2025-03-01' } }, splitName(name).first_name, splitName(name).last_name);
   const people = [
     mk('Hannah Doyle', 'hannah.doyle@example.com', ['Camp Leader'], ['ev-p7', 'ev-beach']),
     mk('James McCartney', 'james.mccartney@example.com', ['Mission Team'], ['ev-beach']),
@@ -231,7 +284,7 @@ function seed() {
     mk('Mark Beattie', 'mark.beattie@example.com', ['SU Group Volunteer'], ['ev-groups']),
     { ...mk('Grace Wilson', 'grace.wilson@example.com', ['Staff'], []), type: 'staff', org: 'SUNI' },
   ];
-  db = { schema: 1, settings: { orgName: 'Scripture Union Northern Ireland', short: 'SUNI', dsoName: 'Designated Safeguarding Officer', dsoPhone: '', dsoEmail: '', dueSoonDays: 30, retentionYears: 6, adminName: 'Admin (demo)', demoControls: true, followUpDays: 5 }, roles, pathways: [essentials, leaders], events, people, progress: {}, completions: [], audit: [] };
+  db = { schema: 1, settings: { orgName: 'Scripture Union Northern Ireland', short: 'SUNI', dsoName: 'Designated Safeguarding Officer', dsoPhone: '', dsoEmail: '', dueSoonDays: 30, retentionYears: 5, autoCleanup: true, lastCleanup: new Date().toISOString().slice(0, 10), adminName: 'Admin (demo)', demoControls: true, followUpDays: 5 }, roles, pathways: [essentials, leaders], events, people, progress: {}, completions: [], audit: [] };
 
   // history so the dashboard has something to show
   const back = d => new Date(Date.now() - d * DAY).toISOString();
@@ -258,6 +311,7 @@ function seed() {
   pm.steps['s-e2'] = { rev: essentials.steps[1].rev, attempts: [60, 40, 60].map((sc, i) => fakeAttempt(mark, essentials, essentials.steps[1], sc, back(5 - i * .4), markWeak)) };
   db.audit.push({ id: uid('a_'), at: back(4.1), personId: mark.id, actor: 'system', action: 'quiz_locked', pathwayId: essentials.id, version: 1, stepId: 's-e2', detail: { reason: 'Maximum attempts reached — flagged for follow-up' } });
   seedCrowd(essentials, leaders, back, complete);
+  seedRetentionCases(essentials, leaders, back, complete);
   db.emailRules = defaultRules(); db.outbox = [];
   // a little history: last week's automatic reminders
   db.people.filter(p => !p.featured).slice(0, 40).forEach((p, i) => { const r = db.emailRules[[1, 2, 4, 6][i % 4]]; const at = back(1 + (i % 9));
@@ -281,23 +335,26 @@ function fakeAttempt(person, pathway, step, score, at, weak = [], rnd = Math.ran
   return a;
 }
 /* ~300 realistic sample volunteers (deterministic, so every reset looks the same) */
-function seedCrowd(essentials, leaders, back, complete) {
-  let x = 20261116; const rnd = () => { x |= 0; x = x + 0x6D2B79F5 | 0; let t = Math.imul(x ^ x >>> 15, 1 | x); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+function seedCrowd(essentials, leaders, back, complete, opts = {}) {
+  const scale = opts.scale || 1, lite = !!opts.lite;
+  let x = opts.seed || 20261116; const rnd = () => { x |= 0; x = x + 0x6D2B79F5 | 0; let t = Math.imul(x ^ x >>> 15, 1 | x); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const pickR = a => a[Math.floor(rnd() * a.length)];
   const first = ['Aaron','Abbie','Adam','Aimee','Amy','Andrew','Anna','Ben','Beth','Caleb','Callum','Caitlin','Ciara','Chloe','Daniel','David','Deborah','Eilidh','Ellen','Emma','Erin','Ethan','Faith','Gareth','Grace','Hannah','Holly','Isaac','Jack','Jacob','James','Jamie','Jenna','Jessica','Joel','John','Jonathan','Josh','Judith','Karen','Kate','Katie','Laura','Leah','Lucy','Luke','Lydia','Mark','Martha','Matthew','Megan','Michael','Naomi','Nathan','Niamh','Oliver','Orla','Paul','Peter','Philip','Rachel','Rebecca','Reuben','Robyn','Ross','Ruth','Ryan','Samuel','Sarah','Shannon','Simon','Sophie','Stephen','Steven','Susan','Thomas','Timothy','Victoria','William','Zoe'];
   const last = ['Adair','Allen','Anderson','Armstrong','Beattie','Bell','Boyd','Brown','Campbell','Clarke','Craig','Crawford','Cunningham','Davidson','Dickson','Doherty','Douglas','Ferguson','Fleming','Gibson','Graham','Hamilton','Henderson','Hughes','Hutchinson','Irvine','Jamison','Johnston','Kerr','Kennedy','Lennon','Logan','Lyttle','Magee','Martin','Maxwell','McAuley','McBride','McCann','McClelland','McConnell','McCullough','McDowell','McFarland','McIlwaine','McKee','McKinney','McMillan','Millar','Mitchell','Montgomery','Moore','Morrison','Murray','Neill','Orr','Patterson','Quinn','Reid','Robinson','Ross','Scott','Shaw','Smyth','Stewart','Taylor','Thompson','Walker','Wallace','Watson','White','Wilson','Wright','Young'];
   const groups = [
-    { n: 150, roles: ['SU Group Volunteer'], ev: () => ['ev-groups'].concat(rnd() < .12 ? ['ev-newcastle'] : []) },
-    { n: 55, roles: ['Camp Leader'], ev: () => [pickR(['ev-p7', 'ev-teen', 'ev-p7', 'ev-teen', 'ev-newcastle'])] },
-    { n: 75, roles: ['Mission Team'], ev: () => [pickR(['ev-beach', 'ev-beach', 'ev-ballycastle'])].concat(rnd() < .15 ? ['ev-newcastle'] : []) },
-    { n: 14, roles: ['Staff'], type: 'staff', ev: () => (rnd() < .5 ? [pickR(['ev-p7', 'ev-teen', 'ev-beach', 'ev-ballycastle'])] : []) },
-    { n: 9, roles: ['Trustee'], type: 'other', ev: () => [] },
-    { n: 8, roles: ['Partner church leader'], type: 'other', ev: () => (rnd() < .5 ? ['ev-groups'] : []) },
+    { n: 14 * scale, roles: ['SU Group Volunteer'], ev: () => ['ev-groups'].concat(rnd() < .12 ? ['ev-newcastle'] : []) },
+    { n: 7 * scale, roles: ['Camp Leader'], ev: () => [pickR(['ev-p7', 'ev-teen', 'ev-p7', 'ev-teen', 'ev-newcastle'])] },
+    { n: 8 * scale, roles: ['Mission Team'], ev: () => [pickR(['ev-beach', 'ev-beach', 'ev-ballycastle'])].concat(rnd() < .15 ? ['ev-newcastle'] : []) },
+    { n: 2 * scale, roles: ['Staff'], type: 'staff', ev: () => (rnd() < .5 ? [pickR(['ev-p7', 'ev-teen', 'ev-beach', 'ev-ballycastle'])] : []) },
+    { n: Math.max(1, Math.round(1 * scale)), roles: ['Trustee'], type: 'other', ev: () => [] },
+    { n: Math.max(1, Math.round(1 * scale)), roles: ['Partner church leader'], type: 'other', ev: () => (rnd() < .5 ? ['ev-groups'] : []) },
   ];
-  const used = new Set(db.people.map(p => p.name));
+  const used = new Set(db.people.map(p => p.name)), emails = new Set(db.people.map(p => p.email));
+  const done = lite ? (p, pw, daysAgo, score) => { const at = back(daysAgo); db.completions.push({ id: certNumber(at), personId: p.id, pathwayId: pw.id, pathwayTitle: pw.title, version: pw.version, completedAt: at, expiresAt: expiryFrom(at, pw.validityMonths), score, attestationName: p.name, attestationText: pw.attestation, edits: [] }); } : complete;
   groups.forEach(g => { for (let k = 0; k < g.n; k++) {
-    let name; do { name = `${pickR(first)} ${pickR(last)}`; } while (used.has(name)); used.add(name);
-    const p = { id: uid('u_'), name, email: name.toLowerCase().replace(/[^a-z]+/g, '.') + '@example.com', type: g.type || 'volunteer', roles: [...g.roles], eventIds: [...new Set(g.ev())], token: uid('inv-'), createdAt: back(30 + rnd() * 600),
+    let fn, ln, name, tries = 0; do { fn = pickR(first); ln = pickR(last); name = `${fn} ${ln}`; } while (used.has(name) && ++tries < 40); used.add(name);
+    let email = name.toLowerCase().replace(/[^a-z]+/g, '.') + '@example.com', n2 = 2; while (emails.has(email)) email = name.toLowerCase().replace(/[^a-z]+/g, '.') + (n2++) + '@example.com'; emails.add(email);
+    const p = { id: uid('u_'), first_name: fn, last_name: ln, name, email, type: g.type || 'volunteer', roles: [...g.roles], eventIds: [...new Set(g.ev())], token: uid('inv-'), createdAt: back(30 + rnd() * 600),
       org: g.type === 'staff' ? 'SUNI' : rnd() < .7 ? pickR(['Newtownbreda Baptist', 'Grace Baptist, Tullycarnet', 'Knock Presbyterian', 'St Mark’s, Dundela', 'Ballyholme Presbyterian', 'Whitewell', 'Portstewart Baptist', 'Ballycastle Presbyterian', 'Lisburn Elim']) : '',
       accessNI: g.type === 'other' && g.roles[0] === 'Trustee' ? { status: 'not_required', date: '' } : rnd() < .82 ? { status: 'cleared', date: back(60 + rnd() * 700).slice(0, 10) } : { status: pickR(['applied', 'not_requested']), date: '' } };
     db.people.push(p);
@@ -305,13 +362,13 @@ function seedCrowd(essentials, leaders, back, complete) {
       const r = rnd();
       // most volunteers are trained; leaders tend to refresh in spring/early summer before camps
       const ago = pw.validityMonths <= 12 ? (rnd() < .55 ? 5 + rnd() * 120 : 120 + rnd() * 300) : 5 + rnd() * 760;
-      if (r < .74) complete(p, pw, Math.round(ago), pickR([80, 80, 100, 100, 100]));
+      if (r < .74) done(p, pw, Math.round(ago), pickR([80, 80, 100, 100, 100]));
       else if (r < .86) {                                                                                     // in progress
         const pr = (db.progress[p.id] ??= {})[pw.id] = { startedAt: back(3 + rnd() * 20), steps: {} };
         const vid = pw.steps.find(s => s.type === 'video'); if (vid) pr.steps[vid.id] = { done: true, rev: vid.rev, watched: 306, at: back(2) };
         if (pw.steps[0].type === 'read') pr.steps[pw.steps[0].id] = { done: true, rev: pw.steps[0].rev, at: back(3) };
-        const q = pw.steps.find(s => s.type === 'quiz'); if (q && rnd() < .4) pr.steps[q.id] = { rev: q.rev, attempts: [fakeAttempt(p, pw, q, pickR([40, 60, 60]), back(1 + rnd() * 5), [], rnd)] };
-      } else if (r < .885) {                                                                                  // locked
+        const q = pw.steps.find(s => s.type === 'quiz'); if (q && !lite && rnd() < .4) pr.steps[q.id] = { rev: q.rev, attempts: [fakeAttempt(p, pw, q, pickR([40, 60, 60]), back(1 + rnd() * 5), [], rnd)] };
+      } else if (r < .885 && !lite) {                                                                                  // locked
         const pr = (db.progress[p.id] ??= {})[pw.id] = { startedAt: back(6), steps: {} };
         const vid = pw.steps.find(s => s.type === 'video'); if (vid) pr.steps[vid.id] = { done: true, rev: vid.rev, watched: 306, at: back(6) };
         const q = pw.steps.find(s => s.type === 'quiz'); const weak = [pickR(q.questions).text.slice(0, 25), pickR(q.questions).text.slice(0, 25)];
@@ -320,6 +377,26 @@ function seedCrowd(essentials, leaders, back, complete) {
       }                                                                                                       // else: not started
     });
   } });
+}
+/* people that show the 5-year retention rules in action */
+function seedRetentionCases(essentials, leaders, back, complete) {
+  const Y = 365.25;
+  const mkp = (first, last, roles, eventIds, createdDaysAgo, extra = {}) => { const p = setName({ id: uid('u_'), email: `${first}.${last}`.toLowerCase() + '@example.com', type: 'volunteer', roles, eventIds, token: uid('inv-'), createdAt: back(createdDaysAgo), org: 'Knock Presbyterian', accessNI: { status: 'cleared', date: back(createdDaysAgo - 20).slice(0, 10) }, ...extra }, first, last); db.people.push(p); return p; };
+  const rec = (p, pw, daysAgo) => { const at = back(daysAgo); db.completions.push({ id: certNumber(at), personId: p.id, pathwayId: pw.id, pathwayTitle: pw.title, version: 1, completedAt: at, expiresAt: expiryFrom(at, pw.validityMonths), score: 100, attestationName: p.name, attestationText: pw.attestation, edits: [] });
+    db.audit.push({ id: uid('a_'), at, personId: p.id, actor: 'learner', action: 'module_completed', pathwayId: pw.id, version: 1, detail: { module: pw.title } }); };
+  const archive = (p, daysAgo) => { p.archived = true; p.archivedAt = back(daysAgo); db.audit.push({ id: uid('a_'), at: p.archivedAt, personId: p.id, actor: 'admin', action: 'volunteer_archived', detail: { name: p.name } }); };
+  // active, with a 6-year-old record plus a recent renewal → the old record is due for removal
+  const olivia = mkp('Olivia', 'Grant', ['SU Group Volunteer'], ['ev-groups'], 7 * Y); rec(olivia, essentials, 6.1 * Y); rec(olivia, essentials, 400);
+  // active, only record is 5¼ years old → after cleanup she shows as not trained
+  const peter = mkp('Peter', 'Lowry', ['SU Group Volunteer'], ['ev-groups'], 6 * Y); rec(peter, essentials, 5.25 * Y);
+  // archived 4 months ago, recent record kept
+  const rebecca = mkp('Rebecca', 'Moore', ['Camp Leader'], [], 3 * Y); rec(rebecca, essentials, 300); rec(rebecca, leaders, 290); archive(rebecca, 120);
+  // archived 2 years ago with one record over 5 years old and one inside → reactivation demo
+  const daniel = mkp('Daniel', 'Hughes', ['Mission Team'], [], 7 * Y); rec(daniel, essentials, 5.6 * Y); rec(daniel, essentials, 2.4 * Y); rec(daniel, leaders, 2.4 * Y); archive(daniel, 2 * Y);
+  // archived over 5 years ago → whole record due for deletion
+  const stephen = mkp('Stephen', 'Bell', ['SU Group Volunteer'], [], 9 * Y); rec(stephen, essentials, 7 * Y); archive(stephen, 5.5 * Y);
+  // archived last year — appears in the sample import file so the import can reactivate her
+  const laura = mkp('Laura', 'Kerr', ['SU Group Volunteer'], [], 3 * Y); rec(laura, essentials, 1.6 * Y); archive(laura, 300);
 }
 function certNumber(at = now()) {
   const y = new Date(at).getFullYear();
@@ -348,7 +425,11 @@ function route() {
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
   const restore = navBack ? scrollMem[cur] || 0 : 0; requestAnimationFrame(() => window.scrollTo({ top: restore }));
-  if (parts[0] === 'i') return learnerRoute(parts.slice(1));
+  if (parts[0] === 'i') { const p = db.people.find(x => x.token === parts[1]); loginPrefill = p ? p.email : ''; return replaceHash('#/login'); }
+  if (parts[0] === 'login') return renderLogin();
+  if (parts[0] === 'auth') return renderAuth(parts[1]);
+  if (parts[0] === 'me') return learnerRoute(parts.slice(1));
+  if (parts[0] === 'preview') return previewAs(parts[1]);
   if (parts[0] === 'verify') return renderVerify(parts[1], parts[2]);
   if (parts[0] === 'inbox') return renderInbox(parts[1], parts[2]);
   if (parts[0] === 'admin') return adminRoute(parts.slice(1));
@@ -365,9 +446,10 @@ function demobar(active) {
   const first = db.people[0];
   return `<nav class="demobar noprint" aria-label="Demo navigation"><span>Demo</span>
     <a href="#/" class="${active === 'hub' ? 'on' : ''}">Start</a>
-    <a href="#/i/${first?.token}" class="${active === 'learner' ? 'on' : ''}">Volunteer</a>
+    <a href="${currentVolunteer() ? '#/me' : '#/login'}" class="${active === 'learner' ? 'on' : ''}">Volunteer</a>
     <a href="#/admin" class="${active === 'admin' ? 'on' : ''}">Admin</a></nav>`;
 }
+function previewBanner() { const s = Session.get('vol'); return s?.preview ? `<div class="previewbar noprint">👁 Admin preview — you’re seeing exactly what ${esc(Person(s.volunteer_id)?.name || '')} sees. <button class="btn xs" data-act="logout">Exit preview</button></div>` : ''; }
 function worriedFab() { return `<button class="fab noprint" data-act="worried">${'<span class="pulse">' + ICON.heart + '</span>'}<span class="lbl">Worried about a child?</span></button>`; }
 function showWorried() {
   const s = db.settings;
@@ -415,6 +497,127 @@ function confetti() {
   })();
 }
 
+/* =====================================================================
+   SESSIONS & SIMULATED MAGIC-LINK LOGIN
+   Live version: POST /api/auth/magic-link → Resend email; GET /auth/:token
+   sets an HttpOnly session cookie. Here the link is shown in a simulated inbox.
+   ===================================================================== */
+const SESSION = { vol: 'suni-session:volunteer', admin: 'suni-session:admin' };
+const Session = {
+  get(k) { try { return JSON.parse(localStorage.getItem(SESSION[k])); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(SESSION[k], JSON.stringify(v)); } catch { } },
+  clear(k) { try { localStorage.removeItem(SESSION[k]); } catch { } },
+};
+const LINK_MINUTES = 30;
+function currentVolunteer() {
+  const s = Session.get('vol'); if (!s) return null;
+  const p = Person(s.volunteer_id);
+  if (!p || p.archived) { Session.clear('vol'); return null; }
+  return p;
+}
+const isAdmin = () => !!Session.get('admin');
+function logout(kind = 'vol') {
+  const s = Session.get(kind);
+  if (kind === 'vol' && s && !s.preview) audit({ personId: s.volunteer_id, actor: 'learner', action: 'logout', detail: {} });
+  if (kind === 'admin') audit({ actor: 'admin', action: 'admin_logout', detail: { email: s?.email } });
+  Session.clear(kind);
+  if (kind === 'vol' && s?.preview) { toast('Preview ended'); return go(`#/admin/people/${s.volunteer_id}`); }
+  toast('You’ve been signed out'); go(kind === 'admin' ? '#/admin' : '#/login');
+}
+const fmtTime = d => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+let loginPrefill = '';
+function renderLogin(prefill = loginPrefill) {
+  if (currentVolunteer() && !Session.get('vol')?.preview) return go('#/me');
+  const samples = db.people.filter(p => p.featured && !p.archived).slice(0, 4).concat(db.people.filter(p => p.archived).slice(-1));
+  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/admin">Admin sign in</a>`) + `<main class="wrap fadein"><div class="login">
+    <div class="card pad-lg login-card">
+      <div class="eyebrow">Volunteer sign in</div><h1 style="font-size:32px;margin:6px 0 8px">Sign in to your safeguarding training</h1>
+      <p class="muted" style="margin-bottom:20px">Enter the email address you gave us. We’ll send you a secure sign-in link — no password needed.</p>
+      <form id="lf" novalidate><label class="f" for="le">Email address</label>
+        <input class="input" id="le" type="email" autocomplete="email" inputmode="email" value="${esc(prefill)}" placeholder="you@example.com" style="font-size:17px;padding:13px 14px">
+        <div class="help" id="lerr" style="color:var(--red-600);display:none"></div>
+        <button class="btn red lg" style="width:100%;margin-top:14px">Email me a sign-in link ${ICON.arrow}</button></form>
+      <div class="privacy"><div class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">${ICON.attest.replace('<svg', '<svg width="20" height="20" style="flex:none;color:var(--teal);margin-top:2px"')}<div>
+        <b>How we use your information</b>
+        <p>We store your name, email address, and training completion dates under our safeguarding obligations, and retain these records for 5 years.</p>
+        <p class="tiny muted" style="margin:0">Scripture Union Northern Ireland is the data controller. You can ask to see or correct your information at any time. <a href="https://www.suni.co.uk" target="_blank" rel="noopener">Read our full privacy notice</a>.</p></div></div></div>
+    </div>
+    ${demoOn() ? `<div class="card demo-help"><div class="dt-lbl" style="margin-bottom:8px">Demo — try one of these</div>${samples.map(p => `<button class="demo-email" data-fill="${esc(p.email)}"><span class="avatar" style="width:28px;height:28px;font-size:11px;background:${avatarColour(p.name)}">${initials(p.name)}</span><span><b>${esc(p.name)}</b>${p.archived ? ' <span class="chip st-none" style="font-size:11px">Archived</span>' : ''}<br><span class="tiny muted">${esc(p.email)}</span></span></button>`).join('')}
+      <p class="tiny muted" style="margin:10px 0 0">No emails are sent — the sign-in link appears in a simulated inbox.</p></div>` : ''}
+  </div></main>` + demobar('learner');
+  $$('[data-fill]').forEach(b => b.onclick = () => { $('#le').value = b.dataset.fill; $('#lerr').style.display = 'none'; $('#le').focus(); });
+  $('#lf').onsubmit = e => { e.preventDefault(); requestMagicLink($('#le').value); };
+}
+function requestMagicLink(raw) {
+  const email = String(raw || '').trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email)) { const er = $('#lerr'); er.textContent = 'Please enter a valid email address.'; er.style.display = 'block'; $('#le').focus(); return; }
+  const p = db.people.find(x => x.email.toLowerCase() === email);
+  if (!p || p.archived) {
+    if (p) audit({ personId: p.id, actor: 'system', action: 'login_blocked', detail: { reason: 'Volunteer is archived' } });
+    // same message either way, so the login screen never reveals who is registered
+    modal(`<header><h2>Check your inbox</h2><button class="iconbtn" data-close>${ICON.x}</button></header><div class="body">
+      <p>If <b>${esc(email)}</b> belongs to an active volunteer, a sign-in link is on its way. It expires in ${LINK_MINUTES} minutes.</p>
+      ${demoOn() ? `<div class="notice warn small">${ICON.info}<div><b>Demo note (not shown in the live version):</b> ${p ? `${esc(p.name)} is <b>archived</b>, so no link was sent — archived volunteers can’t sign in until an admin reactivates them.` : 'no volunteer has this email, so no link was sent.'}</div></div>` : ''}</div>
+      <footer><button class="btn ghost" data-close>OK</button></footer>`);
+    return;
+  }
+  const link = { token: uid('ml_') + uid(''), volunteer_id: p.id, created_at: now(), expires_at: new Date(Date.now() + LINK_MINUTES * 60e3).toISOString(), used_at: null };
+  (db.magicLinks ||= []).push(link); db.magicLinks = db.magicLinks.slice(-200);
+  audit({ personId: p.id, actor: 'system', action: 'magic_link_sent', detail: { expires_at: link.expires_at } });
+  simulatedInbox(p, link);
+}
+function simulatedInbox(p, link) {
+  const url = location.href.split('#')[0] + '#/auth/' + link.token;
+  const s = modal(`<header><div><div class="eyebrow">📬 Simulated inbox</div><h2 style="margin-top:4px">${esc(p.email)}</h2><div class="small muted">This is the email ${esc(firstName(p.name))} would receive. Nothing has actually been sent.</div></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body">
+      <div class="ib-meta" style="margin:0 0 10px"><b>Your sign-in link for SUNI safeguarding training</b><div class="tiny muted">From Scripture Union NI &lt;training@suni.co.uk&gt; · just now</div></div>
+      <div class="em"><div class="em-head">${LOGO(34)}</div><div class="em-bar"></div><div class="em-body">
+        <h2>Sign in to your training</h2><p>Hi ${esc(firstName(p.name))},</p><p>Tap the button below to sign in. This link can only be used once and expires in ${LINK_MINUTES} minutes, at <b>${fmtTime(link.expires_at)}</b>.</p>
+        <a class="em-btn" href="#/auth/${link.token}" data-close>Sign in to my training</a>
+        <p class="em-small">If you didn’t ask to sign in, you can ignore this email — nobody can sign in without access to your inbox.</p></div>
+        <div class="em-foot">Scripture Union Northern Ireland · Charity NIC104852</div></div>
+      <div class="row between" style="margin-top:12px"><span class="small muted" id="mlcount"></span>${demoOn() ? `<button class="btn ghost xs" id="mlexp">Demo: try an expired link</button>` : ''}</div>
+    </div>`, 'phonewrap mlmodal');
+  const tick = () => { const left = new Date(link.expires_at) - Date.now(); const el = $('#mlcount', s); if (!el) return clearInterval(t); el.textContent = left > 0 ? `Link expires in ${Math.floor(left / 60e3)}:${String(Math.floor(left / 1e3) % 60).padStart(2, '0')}` : 'Link expired'; };
+  const t = setInterval(tick, 1000); tick();
+  $('#mlexp', s) && ($('#mlexp', s).onclick = () => { const l = { ...link, token: uid('ml_') + uid(''), created_at: new Date(Date.now() - 45 * 60e3).toISOString(), expires_at: new Date(Date.now() - 15 * 60e3).toISOString() }; db.magicLinks.push(l); persist(); closeModal(); go('#/auth/' + l.token); });
+}
+function renderAuth(token) {
+  const link = (db.magicLinks || []).find(l => l.token === token); const p = link && Person(link.volunteer_id);
+  const fail = (title, msg) => { app().innerHTML = topbar() + `<main class="wrap fadein"><div class="login"><div class="card pad-lg login-card" style="text-align:center">
+      <div class="vbadge" style="--tone:var(--amber);background:var(--amber);margin:0 auto 14px">${ICON.info.replace('<svg', '<svg width="40" height="40"')}</div>
+      <h1 style="font-size:28px;margin-bottom:8px">${title}</h1><p class="muted">${msg}</p><a class="btn red lg" href="#/login" style="margin-top:10px">Send me a new link</a></div></div></main>` + demobar('learner'); };
+  if (!link || !p) return fail('This sign-in link isn’t valid', 'It may have been mistyped. Ask for a new link and use the latest email.');
+  if (link.used_at) return fail('This link has already been used', 'For your security each sign-in link works once. Ask for a new one to sign in again.');
+  if (new Date(link.expires_at) < new Date()) return fail('This link has expired', `Sign-in links only last ${LINK_MINUTES} minutes. Ask for a new one — it only takes a moment.`);
+  if (p.archived) return fail('You can’t sign in right now', 'Your volunteer record is archived. Please contact SUNI if you’re serving again.');
+  link.used_at = now();
+  Session.set('vol', { volunteer_id: p.id, at: now() });
+  audit({ personId: p.id, actor: 'learner', action: 'login', detail: { method: 'magic_link' } });
+  toast(`Signed in — welcome, ${firstName(p.name)}`); replaceHash('#/me');
+}
+const ADMIN_DEMO = { email: 'admin@suni.demo', pass: 'safeguarding' };
+function renderAdminLogin() {
+  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/login">Volunteer sign in</a>`) + `<main class="wrap fadein"><div class="login"><div class="card pad-lg login-card">
+    <div class="eyebrow">Admin</div><h1 style="font-size:30px;margin:6px 0 8px">Admin sign in</h1>
+    <p class="muted">For SUNI staff who manage training records.</p>
+    <form id="af"><div class="field"><label class="f">Email</label><input class="input" id="ae" type="email" value="${ADMIN_DEMO.email}"></div>
+      <div class="field"><label class="f">Passcode</label><input class="input" id="ap" type="password" value=""><div class="help">Demo passcode: <b>${ADMIN_DEMO.pass}</b>. The live version would use Cloudflare Access with your SUNI account.</div></div>
+      <div class="help" id="aerr" style="color:var(--red-600);display:none">That email and passcode don’t match.</div>
+      <button class="btn red lg" style="width:100%">Sign in</button></form></div></div></main>` + demobar('admin');
+  $('#af').onsubmit = e => { e.preventDefault();
+    if ($('#ae').value.trim().toLowerCase() !== ADMIN_DEMO.email || $('#ap').value !== ADMIN_DEMO.pass) { $('#aerr').style.display = 'block'; return; }
+    Session.set('admin', { email: ADMIN_DEMO.email, name: db.settings.adminName, at: now() }); audit({ actor: 'admin', action: 'admin_login', detail: { email: ADMIN_DEMO.email } }); toast('Signed in as admin'); route(); };
+}
+function previewAs(id) {
+  if (!isAdmin()) return go('#/admin');
+  const p = Person(id); if (!p) return go('#/admin/people');
+  if (p.archived) { toast('Archived volunteers can’t be previewed — reactivate them first'); return go('#/admin/people/' + id); }
+  Session.set('vol', { volunteer_id: p.id, at: now(), preview: true });
+  audit({ personId: p.id, actor: 'admin', action: 'admin_preview', detail: { name: p.name } });
+  replaceHash('#/me');
+}
+
 /* ---------- hub (demo landing) ---------- */
 function renderHub() {
   app().innerHTML = topbar() + `<main class="wrap fadein">
@@ -426,11 +629,12 @@ function renderHub() {
   </div>
   <div class="grid g2">
     <div class="card pad-lg">
-      <div class="eyebrow">Volunteer view</div><h2 style="margin:6px 0 8px">Open an invite link</h2>
-      <p class="muted">Each volunteer receives a unique link. Pick one of these sample volunteers to see their training as they would. (There are ${db.people.length} people in the demo — see them all in Admin.)</p>
+      <div class="eyebrow">Volunteer view</div><h2 style="margin:6px 0 8px">Sign in with a magic link</h2>
+      <p class="muted">Volunteers sign in with just their email — no passwords. Pick a sample volunteer to sign in as them (the link appears in a simulated inbox). There are ${db.people.filter(p => !p.archived).length} active volunteers in the demo.</p>
+      <a class="btn red" href="#/login" style="margin:12px 0 4px">Volunteer sign in ${ICON.arrow}</a>
       <div class="stack" style="margin-top:14px">${(db.people.filter(p => p.featured).length ? db.people.filter(p => p.featured) : db.people.slice(0, 6)).map(p => {
         const req = requiredPathwaysFor(p); const done = req.filter(x => ['complete', 'due'].includes(statusOf(p, x).key)).length;
-        return `<a class="row between" href="#/i/${p.token}" style="padding:10px 12px;border-radius:14px;background:#FBFAF8;color:inherit;text-decoration:none">
+        return `<a class="row between" href="#/login" data-prefill="${esc(p.email)}" style=""padding:10px 12px;border-radius:14px;background:#FBFAF8;color:inherit;text-decoration:none">
           <span class="person"><span class="avatar" style="background:${avatarColour(p.name)}">${initials(p.name)}</span><span><b>${esc(p.name)}</b><br><span class="tiny muted">${esc(p.roles.join(', '))}</span></span></span>
           <span class="tiny muted">${done}/${req.length} complete ${ICON.arrow}</span></a>`;
       }).join('')}</div>
@@ -438,20 +642,21 @@ function renderHub() {
     <div class="card pad-lg">
       <div class="eyebrow">Admin</div><h2 style="margin:6px 0 8px">Manage training & records</h2>
       <p class="muted">Build pathways from video, reading and quiz steps. Assign them by role or by event. Track who is ready, and export a compliance register.</p>
-      <a class="btn red lg" href="#/admin" style="margin-top:10px">Open admin ${ICON.arrow}</a>
-      <div class="notice info" style="margin-top:22px">${ICON.info}<div class="small">This demo saves everything in this browser only. The live version keeps records in a secure central database, and admin pages sit behind a login.</div></div>
+      <a class="btn red lg" href="#/admin" style="margin-top:10px">Admin sign in ${ICON.arrow}</a>
+      <div class="notice info" style="margin-top:22px">${ICON.info}<div class="small">This demo keeps its data in this browser, in tables shaped exactly like the live database (Cloudflare D1). Emails appear in simulated inboxes instead of being sent.</div></div>
     </div>
   </div></main>` + demobar('hub');
+  $$('[data-prefill]').forEach(a => a.onclick = () => { loginPrefill = a.dataset.prefill; });
 }
 
 /* =====================================================================
    LEARNER
    ===================================================================== */
 function learnerRoute(parts) {
-  const person = db.people.find(p => p.token === parts[0]);
-  if (!person) { app().innerHTML = topbar() + `<main class="wrap narrow"><div class="card pad-lg empty"><h2>This link isn’t valid</h2><p>It may have expired or been mistyped. Please contact the person who sent it.</p></div></main>` + demobar('learner'); return; }
-  if (parts[1] === 'p' && parts[2]) return renderPlayer(person, P(parts[2]), parts[3]);
-  if (parts[1] === 'cert' && parts[2]) return renderCert(parts[2], person);
+  const person = currentVolunteer();
+  if (!person) { toast('Please sign in to continue'); return replaceHash('#/login'); }
+  if (parts[0] === 'p' && parts[1]) return renderPlayer(person, P(parts[1]), parts[2]);
+  if (parts[0] === 'cert' && parts[1]) { const c = db.completions.find(x => x.id === parts[1]); if (!c || c.personId !== person.id) return replaceHash('#/me'); return renderCert(parts[1], person); }
   renderLearnerHome(person);
 }
 function ring(pct, colour = 'var(--red)') {
@@ -464,7 +669,7 @@ function renderLearnerHome(person) {
   const done = req.filter(p => ['complete', 'due'].includes(statusOf(person, p).key)).length;
   const allDone = req.length && done === req.length;
   const unread = (db.outbox || []).filter(m => m.personId === person.id && !(db.readMail || {})[m.id]).length;
-  app().innerHTML = topbar(`${demoOn() ? `<a class="btn ghost sm" href="#/inbox/${person.token}" title="Demo: see the emails this volunteer has been sent">📬 Demo inbox${unread ? ` <span class="ibbadge">${unread}</span>` : ''}</a>` : ''}<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span>`, `#/i/${person.token}`) +
+  app().innerHTML = topbar(`${demoOn() ? `<a class="btn ghost sm" href="#/inbox/${person.token}" title="Demo: see the emails this volunteer has been sent">📬 Demo inbox${unread ? ` <span class="ibbadge">${unread}</span>` : ''}</a>` : ''}<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein">
     <div class="hero" style="margin-bottom:26px">
       <div class="flamebg">${FLAME(170)}</div>
@@ -482,10 +687,10 @@ function renderLearnerHome(person) {
       const st = statusOf(person, p); const pr = prog(person.id, p.id);
       const pct = ['complete', 'due'].includes(st.key) ? 100 : pctDone(pr, p);
       const why = [...p.requiredForRoles.filter(r => person.roles.includes(r)).map(r => `${r} role`), ...evs.filter(e => e.requiredPathways.includes(p.id)).map(e => e.name)];
-      const cta = st.key === 'complete' || st.key === 'due' ? `<a class="btn ghost sm" href="#/i/${person.token}/cert/${st.c.id}">View certificate</a>` + (st.key === 'due' ? ` <a class="btn red sm" href="#/i/${person.token}/p/${p.id}">Refresh now</a>` : '')
+      const cta = st.key === 'complete' || st.key === 'due' ? `<a class="btn ghost sm" href="#/me/cert/${st.c.id}">View certificate</a>` + (st.key === 'due' ? ` <a class="btn red sm" href="#/me/p/${p.id}">Refresh now</a>` : '')
         : st.key === 'locked' ? `<span class="small muted">We’ll be in touch to help</span>`
-          : `<a class="btn red sm" href="#/i/${person.token}/p/${p.id}">${pct ? 'Continue' : st.key === 'expired' ? 'Renew' : 'Start'} ${ICON.arrow}</a>`;
-      return `<div class="card pcard" data-href="${st.key === 'complete' ? '' : `#/i/${person.token}/p/${p.id}`}">
+          : `<a class="btn red sm" href="#/me/p/${p.id}">${pct ? 'Continue' : st.key === 'expired' ? 'Renew' : 'Start'} ${ICON.arrow}</a>`;
+      return `<div class="card pcard" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}">
         ${ring(pct, ['complete', 'due'].includes(st.key) ? 'var(--teal)' : p.colour)}
         <div style="flex:1;min-width:0">
           <div class="row" style="gap:8px;margin-bottom:4px"><h3>${esc(p.title)}</h3>${chip(st)}</div>
@@ -502,7 +707,7 @@ function renderLearnerHome(person) {
 
 /* ---------- player ---------- */
 function renderPlayer(person, pathway, stepParam) {
-  if (!pathway) return go(`#/i/${person.token}`);
+  if (!pathway) return go('#/me');
   const pr = prog(person.id, pathway.id);
   if (!pr.startedAt) { pr.startedAt = now(); audit({ personId: person.id, actor: 'learner', action: 'pathway_started', pathwayId: pathway.id, version: pathway.version, detail: {} }); }
   const steps = [...pathway.steps, { id: 'attest', type: 'attest', title: 'Sign-off' }];
@@ -511,7 +716,7 @@ function renderPlayer(person, pathway, stepParam) {
   if (isNaN(idx) || idx < 0) idx = firstOpen;
   const step = steps[idx];
   const kindLabel = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz', attest: 'Attestation' };
-  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/i/${person.token}">${ICON.back} My training</a>`, `#/i/${person.token}`) +
+  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me">${ICON.back} My training</a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
     <aside>
       <div class="eyebrow">Pathway · v${pathway.version}</div>
@@ -525,8 +730,8 @@ function renderPlayer(person, pathway, stepParam) {
     </aside>
     <section id="stage" class="card pad-lg"></section>
   </div></main>` + worriedFab() + demobar('learner');
-  $$('.steps li[data-step]').forEach(li => { const f = () => go(`#/i/${person.token}/p/${pathway.id}/${li.dataset.step}`); li.addEventListener('click', f); li.addEventListener('keydown', e => e.key === 'Enter' && f()); });
-  const next = () => go(`#/i/${person.token}/p/${pathway.id}/${idx + 1}`);
+  $$('.steps li[data-step]').forEach(li => { const f = () => go(`#/me/p/${pathway.id}/${li.dataset.step}`); li.addEventListener('click', f); li.addEventListener('keydown', e => e.key === 'Enter' && f()); });
+  const next = () => go(`#/me/p/${pathway.id}/${idx + 1}`);
   const stage = $('#stage');
   ({ video: stageVideo, read: stageRead, quiz: stageQuiz, attest: stageAttest })[step.type](stage, { person, pathway, pr, step, next, idx });
 }
@@ -793,7 +998,7 @@ function lockedExplainer({ person, step }) {
       <span class="muted">Don’t want to wait?</span>
       ${S.dsoEmail ? `<a href="mailto:${esc(S.dsoEmail)}?subject=${encodeURIComponent('Safeguarding training – quiz')}">Email ${esc(S.dsoName)}</a>` : '<span class="muted">Contact details: <i>add in Admin → Settings</i></span>'}
       ${S.dsoPhone ? `<a href="tel:${esc(S.dsoPhone)}">Call ${esc(S.dsoPhone)}</a>` : ''}
-      <a href="#/i/${person.token}/p/${ctx_pid(step)}/0">Rewatch the video in the meantime</a>
+      <a href="#/me/p/${ctx_pid(step)}/0">Rewatch the video in the meantime</a>
     </div>
   </div>`;
 }
@@ -868,12 +1073,12 @@ function runQuiz(stage, ctx, st, auto) {
       ${!passed && left <= 0 ? `<div style="margin-top:22px">${lockedExplainer(ctx)}</div>` : ''}
       <div class="review">${drawn.map(d => { const ok = d.chosen === d.q.correct; return `<div class="ri"><span class="ic" style="background:${ok ? 'var(--teal)' : 'var(--red)'}">${ok ? '✓' : '!'}</span><div><b>${esc(d.q.text)}</b><div class="small" style="margin-top:4px">${ok || passed ? '' : `<span class="muted">Your answer: ${esc(d.q.options[d.chosen])}</span><br>`}${esc(d.q.explanation || '')}</div></div></div>`; }).join('')}</div>
       <div class="row" style="justify-content:flex-end;margin-top:22px">
-        ${passed ? `<button class="btn red" id="qn">Continue ${ICON.arrow}</button>` : left > 0 ? `<button class="btn ghost" id="qrw">Rewatch video</button><button class="btn red" id="qr">Try again</button>` : `<a class="btn ghost" href="#/i/${person.token}">Back to my training</a>`}</div>` + (passed ? '' : left > 0 ? quizDemoPanel(step) : demoPanel([['demoReopen', '↺ Reopen quiz (as an admin would)']]));
+        ${passed ? `<button class="btn red" id="qn">Continue ${ICON.arrow}</button>` : left > 0 ? `<button class="btn ghost" id="qrw">Rewatch video</button><button class="btn red" id="qr">Try again</button>` : `<a class="btn ghost" href="#/me">Back to my training</a>`}</div>` + (passed ? '' : left > 0 ? quizDemoPanel(step) : demoPanel([['demoReopen', '↺ Reopen quiz (as an admin would)']]));
     bindQuizDemo(stage, ctx, st);
     $('#demoReopen', stage) && ($('#demoReopen', stage).onclick = () => demoReopen(ctx, st));
     $('#qn') && ($('#qn').onclick = ctx.next);
     $('#qr') && ($('#qr').onclick = () => runQuiz(stage, ctx, st));
-    $('#qrw') && ($('#qrw').onclick = () => { const vi = pathway.steps.findIndex(s => s.type === 'video'); go(`#/i/${person.token}/p/${pathway.id}/${Math.max(0, vi)}`); });
+    $('#qrw') && ($('#qrw').onclick = () => { const vi = pathway.steps.findIndex(s => s.type === 'video'); go(`#/me/p/${pathway.id}/${Math.max(0, vi)}`); });
   };
   if (auto) { autoAnswer(auto); finish(true); } else draw();
 }
@@ -903,6 +1108,7 @@ function stageAttest(stage, { person, pathway, pr }) {
     pr.completedVersion = pathway.version; pr.completedAt = at;
     audit({ personId: person.id, actor: 'learner', action: 'attested', pathwayId: pathway.id, version: pathway.version, detail: { name: c.attestationName, certId, statement: pathway.attestation } });
     audit({ personId: person.id, actor: 'system', action: 'certificate_issued', pathwayId: pathway.id, version: pathway.version, detail: { certId, expiresAt: c.expiresAt } });
+    audit({ personId: person.id, actor: 'learner', action: 'module_completed', pathwayId: pathway.id, version: pathway.version, detail: { module: pathway.title, record_id: certId, completed_at: at } });
     // reset progress so the next renewal starts fresh (history stays in audit + completions)
     db.progress[person.id][pathway.id] = { steps: {}, startedAt: null, completedVersion: pathway.version, completedAt: at };
     autoEmail('complete', person, { training: pathway.title, expiry: c.expiresAt, key: c.id });
@@ -917,8 +1123,8 @@ function completeScreen(person, c) {
     <div class="eyebrow">Training complete</div><h1 style="margin:6px 0 10px">Thank you, ${esc(firstName(person.name))}!</h1>
     <p class="muted" style="max-width:52ch;margin:0 auto">You’ve completed <b>${esc(c.pathwayTitle)}</b>. Your certificate is valid until <b>${fmtDate(c.expiresAt)}</b> — we’ll remind you before it runs out.</p>
     <div class="row" style="justify-content:center;margin-top:20px">
-      <a class="btn ghost" href="#/i/${person.token}/cert/${c.id}">${ICON.print} View certificate</a>
-      ${others.length ? `<a class="btn red" href="#/i/${person.token}/p/${others[0].id}">Next: ${esc(others[0].title)} ${ICON.arrow}</a>` : `<a class="btn red" href="#/i/${person.token}">Back to my training</a>`}
+      <a class="btn ghost" href="#/me/cert/${c.id}">${ICON.print} View certificate</a>
+      ${others.length ? `<a class="btn red" href="#/me/p/${others[0].id}">Next: ${esc(others[0].title)} ${ICON.arrow}</a>` : `<a class="btn red" href="#/me">Back to my training</a>`}
     </div></div>`;
 }
 
@@ -941,7 +1147,7 @@ const verifyUrl = c => { const b = publicBase(); return b ? `${b}#/verify/${c.id
 function renderCert(certId, viewer) {
   const c = db.completions.find(x => x.id === certId);
   const person = c && Person(c.personId);
-  const back = viewer ? `#/i/${viewer.token}` : '#/admin';
+  const back = viewer ? '#/me' : '#/admin';
   if (!c || !person) { app().innerHTML = topbar() + `<main class="wrap"><div class="card empty">Certificate not found.</div></main>`; return; }
   app().innerHTML = topbar(`<a class="btn ghost sm noprint" href="${back}" data-back="${back}">${ICON.back} Back</a><button class="btn ghost sm noprint" id="scanprev">📱 Preview scan</button><button class="btn red sm noprint" onclick="print()">${ICON.print} Print / Save PDF</button>`, back) + `<main class="wrap fadein">
     ${c.revoked ? `<div class="notice bad noprint" style="max-width:980px;margin:0 auto 14px">${ICON.info}<div><b>${c.revoked.replacedBy ? `Replaced by ${esc(c.revoked.replacedBy)}` : 'This certificate has been revoked'}</b> on ${fmtDate(c.revoked.at)} — “${esc(c.revoked.reason)}”</div></div>` : ''}
@@ -1018,4 +1224,6 @@ document.addEventListener('click', e => {
   const bk = e.target.closest('[data-back]'); if (bk) { e.preventDefault(); appBack(bk.dataset.back); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act === 'worried') showWorried();
+  if (a.dataset.act === 'logout') logout('vol');
+  if (a.dataset.act === 'adminlogout') logout('admin');
 });
