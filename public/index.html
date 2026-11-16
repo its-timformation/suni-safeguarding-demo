@@ -114,7 +114,11 @@ td .tag{white-space:nowrap}
 table.clickable tbody tr{cursor:pointer}
 table.clickable tbody tr:hover{background:#FBF7F3}
 table.clickable tbody tr:hover .chev{opacity:1;transform:translateX(2px)}
-.rowacts{text-align:right;white-space:nowrap}.rowacts .btn{margin-left:4px}
+.rowacts{text-align:right;white-space:nowrap}
+.rowacts>*{vertical-align:middle}
+.rowacts .btn{margin-left:4px;height:32px;padding-top:0;padding-bottom:0;line-height:1}
+.rowacts .btn[data-copy]{width:32px;padding:0}
+.rowacts .btn svg{display:block}
 .chev{display:inline-grid;place-items:center;width:24px;margin-left:6px;color:var(--red);opacity:.35;transition:.15s;vertical-align:middle}
 .typepill{display:inline-block;font-family:var(--cond);text-transform:uppercase;letter-spacing:.06em;font-weight:700;font-size:12px;border-radius:6px;padding:2px 7px;margin:2px 6px 2px 0}
 .t-volunteer{background:var(--red-50);color:var(--red-600)}.t-staff{background:var(--teal-50);color:var(--teal)}.t-other{background:var(--plum-50);color:var(--plum)}
