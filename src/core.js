@@ -453,7 +453,9 @@ function demobar(active) {
   return `<nav class="demobar noprint" aria-label="Demo navigation"><button class="db-tog" data-act="demobar" aria-label="Demo menu">Demo</button><span>Demo</span>
     <a href="#/" class="${active === 'hub' ? 'on' : ''}">Start</a>
     <a href="${currentVolunteer() ? '#/me' : '#/login'}" class="${active === 'learner' ? 'on' : ''}">Volunteer</a>
-    <a href="#/admin" class="${active === 'admin' ? 'on' : ''}">Admin</a></nav>`;
+    <a href="#/admin" class="${active === 'admin' ? 'on' : ''}">Admin</a>${(() => { const v = active === 'learner' && currentVolunteer(); if (!v) return '';
+      const n = (db.outbox || []).filter(m => m.personId === v.id && !(db.readMail || {})[m.id]).length;
+      return `<a href="#/inbox/${v.token}" class="db-inbox" title="Demo: the emails ${esc(firstName(v.name))} has been sent">📬 Inbox${n ? ` <span class="ibbadge">${n}</span>` : ''}</a>`; })()}</nav>`;
 }
 function previewBanner() { const s = Session.get('vol'); return s?.preview ? `<div class="previewbar noprint">👁 Admin preview — you’re seeing exactly what ${esc(Person(s.volunteer_id)?.name || '')} sees. <button class="btn xs" data-act="logout">Exit preview</button></div>` : ''; }
 function worriedFab() { return `<button class="fab noprint" data-act="worried">${'<span class="pulse">' + ICON.heart + '</span>'}<span class="lbl">Worried about a child?</span></button>`; }
@@ -688,8 +690,7 @@ function renderLearnerHome(person) {
   const done = req.filter(p => statusOf(person, p).key === 'complete').length;
   const refreshN = req.filter(p => refreshInfo(person, p, statusOf(person, p))).length;
   const allDone = req.length && done === req.length;
-  const unread = (db.outbox || []).filter(m => m.personId === person.id && !(db.readMail || {})[m.id]).length;
-  app().innerHTML = topbar(`${demoOn() ? `<a class="btn ghost sm" href="#/inbox/${person.token}" title="Demo: see the emails this volunteer has been sent">📬 Demo inbox${unread ? ` <span class="ibbadge">${unread}</span>` : ''}</a>` : ''}<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
+  app().innerHTML = topbar(`<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein">
     <div class="hero" style="margin-bottom:26px">
       <div class="flamebg">${FLAME(170)}</div>
