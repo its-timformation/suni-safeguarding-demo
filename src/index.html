@@ -903,11 +903,63 @@ textarea.autogrow{resize:none;overflow:hidden;min-height:44px;line-height:1.4}
 .brand-org{display:none!important}
 .vhead .brand-lbl small{display:block;margin-top:2px}
 @media(max-width:620px){
-  .brand-org{display:block!important;font-size:11px!important}
   .brand-lbl b{font-size:16px!important}
   .vhead .brand-full,.vhead .brand-div{display:none}
 }
 @media(max-width:360px){.brand-lbl b{font-size:14.5px!important}}
+
+/* ===== breathing room ===== */
+.card{padding:26px}
+.card h3{line-height:1.3}
+p{line-height:1.6}
+.small{line-height:1.55}
+.notice{line-height:1.55;padding:16px 18px}
+.trainhead{margin:34px 0 16px;align-items:baseline}
+.pclist{display:grid;gap:20px}
+/* training card: ring | content, sections separated */
+.pcard{display:grid!important;grid-template-columns:68px minmax(0,1fr) auto;grid-template-areas:"band band band" "ring head cta" "ring desc cta" "ring meta cta";column-gap:22px;row-gap:0;align-items:start;padding:26px 28px}
+.pcard .rfband{grid-area:band;margin:0 0 20px}
+.pc-ring{grid-area:ring}
+.pc-head{grid-area:head;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:34px}
+.pc-head h3{font-size:19px;margin:0}
+.pc-desc{grid-area:desc;margin:8px 0 0;color:var(--ink-2);font-size:15.5px;line-height:1.6;max-width:62ch}
+.pc-meta{grid-area:meta;list-style:none;margin:16px 0 0;padding:14px 0 0;border-top:1px solid #F1EDE8;display:grid;gap:8px;font-size:14px;color:var(--muted)}
+.pc-meta li{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.pc-k{font-family:var(--cond);text-transform:uppercase;letter-spacing:.06em;font-size:12.5px;font-weight:700;color:var(--muted);min-width:88px}
+.pc-meta li:not(:first-child){color:var(--ink-2)}
+.pc-ic{display:inline-flex;gap:4px;color:var(--muted)}.pc-ic svg{display:block}
+.pcard .pcta{grid-area:cta;align-self:center;flex-direction:column;align-items:stretch;gap:10px;min-width:190px}
+.pcard .pcta .btn{justify-content:center}
+@media(max-width:820px){
+  .pcard{grid-template-columns:56px minmax(0,1fr);grid-template-areas:"band band" "ring head" "desc desc" "meta meta" "cta cta";column-gap:16px;padding:22px}
+  .pcard .ring,.pcard .rbadge{width:56px;height:56px}.pcard .ring svg{width:56px;height:56px}
+  .pcard .rbadge{border-width:6px}.pcard .rbadge svg{width:22px;height:22px}
+  .pc-head{align-self:center;flex-direction:column;align-items:flex-start;gap:6px}
+  .pc-desc{margin-top:16px}
+  .pcard .pcta{margin-top:20px;flex-direction:row;flex-wrap:wrap;min-width:0}
+  .pcard .pcta .btn{flex:1 1 auto}
+}
+@media(max-width:620px){
+  .card{padding:20px}
+  .pcard{padding:20px}
+  .trainhead{flex-direction:column;align-items:flex-start;gap:4px;margin-top:28px}
+  .hero h1{font-size:30px;line-height:1.15}
+  .pcard .pcta{flex-direction:column}
+}
+
+/* header never overlaps: the brand shrinks, actions keep their size */
+.topbar .in{min-width:0}
+.brand{min-width:0;flex:0 1 auto;overflow:hidden}
+.brand-lbl{min-width:0}
+.brand-lbl b{overflow:hidden;text-overflow:ellipsis}
+.topbar .spacer{flex:1 1 0;min-width:8px}
+.tb-back,.tb-acts,.tb-more{flex:none}
+@media(max-width:620px){
+  .tb-back .btn .tb-txt{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .pc-meta li{display:grid;gap:2px}.pc-meta li:first-child{display:flex;gap:8px;align-items:center}.pc-k{min-width:0}
+  .tb-acts .person b{display:none}
+}
+@media(max-width:400px){.brand-lbl b{font-size:14.5px!important}}
 </style>
 </head>
 <body>

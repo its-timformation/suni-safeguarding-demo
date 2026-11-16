@@ -750,12 +750,12 @@ function refreshInfo(person, pw, st) {
 function refreshRing(kind, pct) {
   const col = kind === 'due' ? '#C98208' : 'var(--red)', bg = kind === 'due' ? 'var(--amber-50)' : 'var(--red-50)';
   const label = kind === 'due' ? 'Refresher due' : kind === 'expired' ? 'Expired' : 'Needs redoing';
-  if (pct) { const r = 28, c = 2 * Math.PI * r; return `<div class="ring rring" role="img" aria-label="${label}, ${pct}% done"><svg width="68" height="68" aria-hidden="true"><circle cx="34" cy="34" r="${r}" stroke="${bg}" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${col}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><b style="color:${col}">${pct}%</b></div>`; }
+  if (pct) { const r = 28, c = 2 * Math.PI * r; return `<div class="ring rring" role="img" aria-label="${label}, ${pct}% done"><svg width="68" height="68" viewBox="0 0 68 68" aria-hidden="true"><circle cx="34" cy="34" r="${r}" stroke="${bg}" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${col}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><b style="color:${col}">${pct}%</b></div>`; }
   return `<div class="rbadge ${kind}" role="img" aria-label="${label}">${kind === 'expired' ? '<b>!</b>' : REFRESH_SVG}</div>`;
 }
 function ring(pct, colour = 'var(--red)') {
   const r = 28, c = 2 * Math.PI * r;
-  return `<div class="ring"><svg width="68" height="68"><circle cx="34" cy="34" r="${r}" stroke="#EFEAE4" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${colour}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" style="transition:stroke-dashoffset .8s var(--ease)"/></svg><b>${pct === 100 ? `<span style="color:${colour};width:22px;display:block">${ICON.check}</span>` : pct + '%'}</b></div>`;
+  return `<div class="ring"><svg width="68" height="68" viewBox="0 0 68 68"><circle cx="34" cy="34" r="${r}" stroke="#EFEAE4" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${colour}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" style="transition:stroke-dashoffset .8s var(--ease)"/></svg><b>${pct === 100 ? `<span style="color:${colour};width:22px;display:block">${ICON.check}</span>` : pct + '%'}</b></div>`;
 }
 function renderLearnerHome(person) {
   const req = requiredPathwaysFor(person);
@@ -767,7 +767,6 @@ function renderLearnerHome(person) {
     `<main class="wrap fadein">
     <div class="hero" style="margin-bottom:26px">
       <div class="flamebg">${FLAME(170)}</div>
-      <div class="eyebrow">${allDone ? 'All done' : 'Your safeguarding training'}</div>
       <h1 style="margin:8px 0 10px">${allDone ? `Thank you, ${esc(firstName(person.name))} — you’re all set.` : `Hi ${esc(firstName(person.name))}, thanks for serving with us.`}</h1>
       <p class="muted" style="max-width:62ch;font-size:17px">${allDone ? 'Your training is up to date. You can download your certificates below at any time.' : `Before you serve${evs.length ? ` at <b>${evs.map(e => esc(e.name)).join('</b> and <b>')}</b>` : ''}, please complete the training below. It takes about ${Math.max(10, req.length * 15)} minutes, and you can stop and pick up where you left off.`}</p>
       <div class="row" style="margin-top:14px">${evs.map(e => `<span class="tag">${ICON.cal.replace('<svg', '<svg width="13" height="13" style="vertical-align:-2px"')} ${esc(e.name)} · ${fmtDate(e.date)}</span>`).join('')}</div>
@@ -775,8 +774,8 @@ function renderLearnerHome(person) {
     ${(() => { const rn = evs.filter(e => eventState(person, e) === 'renew'); if (!rn.length) return '';
       const exp = Math.min(...rn.flatMap(e => e.requiredPathways.map(pid => +new Date(latestCompletion(person.id, pid).expiresAt))));
       return `<div class="notice warn" style="margin-bottom:18px">${ICON.info}<div><b>Heads up:</b> a certificate of yours runs out on ${fmtDate(exp)}, before <b>${rn.map(e => esc(e.name)).join('</b> and <b>')}</b>. You’ll be able to refresh it from ${fmtDate(exp - (db.settings.dueSoonDays || 30) * DAY)}.</div></div>`; })()}
-    <div class="row between" style="margin-bottom:12px"><h2>Your training</h2><span class="muted small">${done} of ${req.length} up to date${refreshN ? ` · <b style="color:#8A5508">${refreshN} to refresh</b>` : ''}</span></div>
-    <div class="grid" style="gap:14px">
+    <div class="row between trainhead"><h2>Your training</h2><span class="muted small">${done} of ${req.length} up to date${refreshN ? ` · <b style="color:#8A5508">${refreshN} to refresh</b>` : ''}</span></div>
+    <div class="pclist">
     ${req.length ? req.map(p => {
       const st = statusOf(person, p); const pr = prog(person.id, p.id);
       const pct = ['complete', 'due'].includes(st.key) ? 100 : pctDone(pr, p);
@@ -785,15 +784,18 @@ function renderLearnerHome(person) {
       const cta = st.key === 'complete' || st.key === 'due' ? (st.key === 'due' ? `<a class="btn red sm" href="#/me/p/${p.id}">${REFRESH_SVG.replace('<svg', '<svg width="16" height="16"')} Refresh now</a> ` : '') + `<a class="btn ghost sm" href="#/me/cert/${st.c.id}">${st.key === 'due' ? 'Current certificate' : 'View certificate'}</a>`
         : st.key === 'locked' ? `<span class="small muted">We’ll be in touch to help</span>`
           : `<a class="btn red sm" href="#/me/p/${p.id}">${pct ? 'Continue' : rf ? (rf.kind === 'reset' ? 'Start again' : 'Renew now') : 'Start'} ${ICON.arrow}</a>`;
-      return `<div class="card pcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}">
+      const mins = Math.max(10, p.steps.length * 5);
+      return `<article class="card pcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}" aria-labelledby="pc-${p.id}">
         ${rf ? `<div class="rfband">${rf.kind === 'expired' ? ICON.info : REFRESH_SVG}<div><b>${rf.title}</b><span>${rf.text}</span></div></div>` : ''}
-        ${rf ? refreshRing(rf.kind, st.key === 'progress' ? pctDone(pr, p) : 0) : ring(pct, st.key === 'complete' ? 'var(--teal)' : p.colour)}
-        <div style="flex:1;min-width:0">
-          <div class="row" style="gap:8px;margin-bottom:4px"><h3>${esc(p.title)}</h3>${chip(st)}</div>
-          <p class="muted small" style="margin:0 0 6px">${esc(p.summary)}</p>
-          <div class="tiny muted">${p.steps.map(s => ICON[s.type].replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')).join(' ')} &nbsp;${plural(p.steps.length, 'step')} + sign-off · Required for ${esc(why.join(', ') || 'your role')}${st.c ? ` · Valid until ${fmtDate(st.c.expiresAt)}` : ''}</div>
-        </div>
-        <div class="noprint pcta">${cta}</div></div>`;
+        <div class="pc-ring">${rf ? refreshRing(rf.kind, st.key === 'progress' ? pctDone(pr, p) : 0) : ring(pct, st.key === 'complete' ? 'var(--teal)' : p.colour)}</div>
+        <div class="pc-head"><h3 id="pc-${p.id}">${esc(p.title)}</h3>${rf ? '' : chip(st)}</div>
+        <p class="pc-desc">${esc(p.summary)}</p>
+        <ul class="pc-meta">
+          <li><span class="pc-ic">${p.steps.map(s => ICON[s.type].replace('<svg', '<svg width="15" height="15"')).join('')}</span>${plural(p.steps.length, 'step')} + sign-off · about ${mins} min</li>
+          <li><span class="pc-k">Needed for</span>${esc(why.join(', ') || 'your role')}</li>
+          ${st.c && !rf ? `<li><span class="pc-k">Valid until</span>${fmtDate(st.c.expiresAt)}</li>` : ''}
+        </ul>
+        <div class="noprint pcta">${cta}</div></article>`;
     }).join('') : `<div class="card empty">No training has been assigned to you yet.</div>`}
     </div>
     ${person.eventIds.length === 0 && !req.length ? '' : `<p class="small muted" style="margin-top:22px">Your answers and completion are recorded so ${esc(db.settings.short)} can show that everyone serving has been trained. See the <a href="https://www.suni.co.uk" target="_blank" rel="noopener">Privacy Notice</a>.</p>`}
@@ -812,14 +814,13 @@ function renderPlayer(person, pathway, stepParam) {
   if (isNaN(idx) || idx < 0) idx = firstOpen;
   const step = steps[idx];
   const kindLabel = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz', attest: 'Attestation' };
-  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me">${ICON.back} My training</a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
+  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me" data-back="#/me">${ICON.back} <span class="tb-txt">My training</span></a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
     <aside id="paside">
-      <div class="eyebrow">Safeguarding training</div>
       <h2 class="ptitle">${esc(pathway.title)}</h2>
       <button class="stepmini" data-act="steps" aria-expanded="false" aria-controls="steplist">
         <span class="sm-dots">${steps.map((s, i) => `<i class="${s.type !== 'attest' && stepDone(pr, s) ? 'd' : ''} ${i === idx ? 'c' : ''}"></i>`).join('')}</span>
-        <span class="sm-txt"><span class="k">Step ${idx + 1} of ${steps.length} · ${kindLabel[step.type]}</span><b>${esc(step.title)}</b></span>
+        <span class="sm-txt"><b>Step ${idx + 1} of ${steps.length}</b><span class="k">${kindLabel[step.type]}</span></span>
         <span class="sm-chev">All steps <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></span></button>
       <ol class="steps" id="steplist">${steps.map((s, i) => {
         const done = s.type !== 'attest' && stepDone(pr, s); const lock = i > firstOpen;
@@ -836,7 +837,7 @@ function renderPlayer(person, pathway, stepParam) {
   ({ video: stageVideo, read: stageRead, quiz: stageQuiz, attest: stageAttest })[step.type](stage, { person, pathway, pr, step, next, idx });
 }
 
-const stepHead = (kind, title, sub = '') => `<div class="eyebrow">${kind}</div><h2 style="margin:4px 0 6px">${esc(title)}</h2>${sub ? `<p class="muted">${sub}</p>` : ''}`;
+const stepHead = (kind, title, sub = '') => `<h2 class="stage-h" style="margin:0 0 6px">${esc(title)}</h2>${sub ? `<p class="muted">${sub}</p>` : ''}`;
 
 /* ---------- demo controls ---------- */
 const demoOn = () => db.settings.demoControls !== false;

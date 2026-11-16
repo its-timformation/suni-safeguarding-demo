@@ -903,11 +903,63 @@ textarea.autogrow{resize:none;overflow:hidden;min-height:44px;line-height:1.4}
 .brand-org{display:none!important}
 .vhead .brand-lbl small{display:block;margin-top:2px}
 @media(max-width:620px){
-  .brand-org{display:block!important;font-size:11px!important}
   .brand-lbl b{font-size:16px!important}
   .vhead .brand-full,.vhead .brand-div{display:none}
 }
 @media(max-width:360px){.brand-lbl b{font-size:14.5px!important}}
+
+/* ===== breathing room ===== */
+.card{padding:26px}
+.card h3{line-height:1.3}
+p{line-height:1.6}
+.small{line-height:1.55}
+.notice{line-height:1.55;padding:16px 18px}
+.trainhead{margin:34px 0 16px;align-items:baseline}
+.pclist{display:grid;gap:20px}
+/* training card: ring | content, sections separated */
+.pcard{display:grid!important;grid-template-columns:68px minmax(0,1fr) auto;grid-template-areas:"band band band" "ring head cta" "ring desc cta" "ring meta cta";column-gap:22px;row-gap:0;align-items:start;padding:26px 28px}
+.pcard .rfband{grid-area:band;margin:0 0 20px}
+.pc-ring{grid-area:ring}
+.pc-head{grid-area:head;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:34px}
+.pc-head h3{font-size:19px;margin:0}
+.pc-desc{grid-area:desc;margin:8px 0 0;color:var(--ink-2);font-size:15.5px;line-height:1.6;max-width:62ch}
+.pc-meta{grid-area:meta;list-style:none;margin:16px 0 0;padding:14px 0 0;border-top:1px solid #F1EDE8;display:grid;gap:8px;font-size:14px;color:var(--muted)}
+.pc-meta li{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.pc-k{font-family:var(--cond);text-transform:uppercase;letter-spacing:.06em;font-size:12.5px;font-weight:700;color:var(--muted);min-width:88px}
+.pc-meta li:not(:first-child){color:var(--ink-2)}
+.pc-ic{display:inline-flex;gap:4px;color:var(--muted)}.pc-ic svg{display:block}
+.pcard .pcta{grid-area:cta;align-self:center;flex-direction:column;align-items:stretch;gap:10px;min-width:190px}
+.pcard .pcta .btn{justify-content:center}
+@media(max-width:820px){
+  .pcard{grid-template-columns:56px minmax(0,1fr);grid-template-areas:"band band" "ring head" "desc desc" "meta meta" "cta cta";column-gap:16px;padding:22px}
+  .pcard .ring,.pcard .rbadge{width:56px;height:56px}.pcard .ring svg{width:56px;height:56px}
+  .pcard .rbadge{border-width:6px}.pcard .rbadge svg{width:22px;height:22px}
+  .pc-head{align-self:center;flex-direction:column;align-items:flex-start;gap:6px}
+  .pc-desc{margin-top:16px}
+  .pcard .pcta{margin-top:20px;flex-direction:row;flex-wrap:wrap;min-width:0}
+  .pcard .pcta .btn{flex:1 1 auto}
+}
+@media(max-width:620px){
+  .card{padding:20px}
+  .pcard{padding:20px}
+  .trainhead{flex-direction:column;align-items:flex-start;gap:4px;margin-top:28px}
+  .hero h1{font-size:30px;line-height:1.15}
+  .pcard .pcta{flex-direction:column}
+}
+
+/* header never overlaps: the brand shrinks, actions keep their size */
+.topbar .in{min-width:0}
+.brand{min-width:0;flex:0 1 auto;overflow:hidden}
+.brand-lbl{min-width:0}
+.brand-lbl b{overflow:hidden;text-overflow:ellipsis}
+.topbar .spacer{flex:1 1 0;min-width:8px}
+.tb-back,.tb-acts,.tb-more{flex:none}
+@media(max-width:620px){
+  .tb-back .btn .tb-txt{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .pc-meta li{display:grid;gap:2px}.pc-meta li:first-child{display:flex;gap:8px;align-items:center}.pc-k{min-width:0}
+  .tb-acts .person b{display:none}
+}
+@media(max-width:400px){.brand-lbl b{font-size:14.5px!important}}
 </style>
 </head>
 <body>
@@ -3968,12 +4020,12 @@ function refreshInfo(person, pw, st) {
 function refreshRing(kind, pct) {
   const col = kind === 'due' ? '#C98208' : 'var(--red)', bg = kind === 'due' ? 'var(--amber-50)' : 'var(--red-50)';
   const label = kind === 'due' ? 'Refresher due' : kind === 'expired' ? 'Expired' : 'Needs redoing';
-  if (pct) { const r = 28, c = 2 * Math.PI * r; return `<div class="ring rring" role="img" aria-label="${label}, ${pct}% done"><svg width="68" height="68" aria-hidden="true"><circle cx="34" cy="34" r="${r}" stroke="${bg}" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${col}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><b style="color:${col}">${pct}%</b></div>`; }
+  if (pct) { const r = 28, c = 2 * Math.PI * r; return `<div class="ring rring" role="img" aria-label="${label}, ${pct}% done"><svg width="68" height="68" viewBox="0 0 68 68" aria-hidden="true"><circle cx="34" cy="34" r="${r}" stroke="${bg}" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${col}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><b style="color:${col}">${pct}%</b></div>`; }
   return `<div class="rbadge ${kind}" role="img" aria-label="${label}">${kind === 'expired' ? '<b>!</b>' : REFRESH_SVG}</div>`;
 }
 function ring(pct, colour = 'var(--red)') {
   const r = 28, c = 2 * Math.PI * r;
-  return `<div class="ring"><svg width="68" height="68"><circle cx="34" cy="34" r="${r}" stroke="#EFEAE4" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${colour}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" style="transition:stroke-dashoffset .8s var(--ease)"/></svg><b>${pct === 100 ? `<span style="color:${colour};width:22px;display:block">${ICON.check}</span>` : pct + '%'}</b></div>`;
+  return `<div class="ring"><svg width="68" height="68" viewBox="0 0 68 68"><circle cx="34" cy="34" r="${r}" stroke="#EFEAE4" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${colour}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" style="transition:stroke-dashoffset .8s var(--ease)"/></svg><b>${pct === 100 ? `<span style="color:${colour};width:22px;display:block">${ICON.check}</span>` : pct + '%'}</b></div>`;
 }
 function renderLearnerHome(person) {
   const req = requiredPathwaysFor(person);
@@ -3985,7 +4037,6 @@ function renderLearnerHome(person) {
     `<main class="wrap fadein">
     <div class="hero" style="margin-bottom:26px">
       <div class="flamebg">${FLAME(170)}</div>
-      <div class="eyebrow">${allDone ? 'All done' : 'Your safeguarding training'}</div>
       <h1 style="margin:8px 0 10px">${allDone ? `Thank you, ${esc(firstName(person.name))} — you’re all set.` : `Hi ${esc(firstName(person.name))}, thanks for serving with us.`}</h1>
       <p class="muted" style="max-width:62ch;font-size:17px">${allDone ? 'Your training is up to date. You can download your certificates below at any time.' : `Before you serve${evs.length ? ` at <b>${evs.map(e => esc(e.name)).join('</b> and <b>')}</b>` : ''}, please complete the training below. It takes about ${Math.max(10, req.length * 15)} minutes, and you can stop and pick up where you left off.`}</p>
       <div class="row" style="margin-top:14px">${evs.map(e => `<span class="tag">${ICON.cal.replace('<svg', '<svg width="13" height="13" style="vertical-align:-2px"')} ${esc(e.name)} · ${fmtDate(e.date)}</span>`).join('')}</div>
@@ -3993,8 +4044,8 @@ function renderLearnerHome(person) {
     ${(() => { const rn = evs.filter(e => eventState(person, e) === 'renew'); if (!rn.length) return '';
       const exp = Math.min(...rn.flatMap(e => e.requiredPathways.map(pid => +new Date(latestCompletion(person.id, pid).expiresAt))));
       return `<div class="notice warn" style="margin-bottom:18px">${ICON.info}<div><b>Heads up:</b> a certificate of yours runs out on ${fmtDate(exp)}, before <b>${rn.map(e => esc(e.name)).join('</b> and <b>')}</b>. You’ll be able to refresh it from ${fmtDate(exp - (db.settings.dueSoonDays || 30) * DAY)}.</div></div>`; })()}
-    <div class="row between" style="margin-bottom:12px"><h2>Your training</h2><span class="muted small">${done} of ${req.length} up to date${refreshN ? ` · <b style="color:#8A5508">${refreshN} to refresh</b>` : ''}</span></div>
-    <div class="grid" style="gap:14px">
+    <div class="row between trainhead"><h2>Your training</h2><span class="muted small">${done} of ${req.length} up to date${refreshN ? ` · <b style="color:#8A5508">${refreshN} to refresh</b>` : ''}</span></div>
+    <div class="pclist">
     ${req.length ? req.map(p => {
       const st = statusOf(person, p); const pr = prog(person.id, p.id);
       const pct = ['complete', 'due'].includes(st.key) ? 100 : pctDone(pr, p);
@@ -4003,15 +4054,18 @@ function renderLearnerHome(person) {
       const cta = st.key === 'complete' || st.key === 'due' ? (st.key === 'due' ? `<a class="btn red sm" href="#/me/p/${p.id}">${REFRESH_SVG.replace('<svg', '<svg width="16" height="16"')} Refresh now</a> ` : '') + `<a class="btn ghost sm" href="#/me/cert/${st.c.id}">${st.key === 'due' ? 'Current certificate' : 'View certificate'}</a>`
         : st.key === 'locked' ? `<span class="small muted">We’ll be in touch to help</span>`
           : `<a class="btn red sm" href="#/me/p/${p.id}">${pct ? 'Continue' : rf ? (rf.kind === 'reset' ? 'Start again' : 'Renew now') : 'Start'} ${ICON.arrow}</a>`;
-      return `<div class="card pcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}">
+      const mins = Math.max(10, p.steps.length * 5);
+      return `<article class="card pcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}" aria-labelledby="pc-${p.id}">
         ${rf ? `<div class="rfband">${rf.kind === 'expired' ? ICON.info : REFRESH_SVG}<div><b>${rf.title}</b><span>${rf.text}</span></div></div>` : ''}
-        ${rf ? refreshRing(rf.kind, st.key === 'progress' ? pctDone(pr, p) : 0) : ring(pct, st.key === 'complete' ? 'var(--teal)' : p.colour)}
-        <div style="flex:1;min-width:0">
-          <div class="row" style="gap:8px;margin-bottom:4px"><h3>${esc(p.title)}</h3>${chip(st)}</div>
-          <p class="muted small" style="margin:0 0 6px">${esc(p.summary)}</p>
-          <div class="tiny muted">${p.steps.map(s => ICON[s.type].replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')).join(' ')} &nbsp;${plural(p.steps.length, 'step')} + sign-off · Required for ${esc(why.join(', ') || 'your role')}${st.c ? ` · Valid until ${fmtDate(st.c.expiresAt)}` : ''}</div>
-        </div>
-        <div class="noprint pcta">${cta}</div></div>`;
+        <div class="pc-ring">${rf ? refreshRing(rf.kind, st.key === 'progress' ? pctDone(pr, p) : 0) : ring(pct, st.key === 'complete' ? 'var(--teal)' : p.colour)}</div>
+        <div class="pc-head"><h3 id="pc-${p.id}">${esc(p.title)}</h3>${rf ? '' : chip(st)}</div>
+        <p class="pc-desc">${esc(p.summary)}</p>
+        <ul class="pc-meta">
+          <li><span class="pc-ic">${p.steps.map(s => ICON[s.type].replace('<svg', '<svg width="15" height="15"')).join('')}</span>${plural(p.steps.length, 'step')} + sign-off · about ${mins} min</li>
+          <li><span class="pc-k">Needed for</span>${esc(why.join(', ') || 'your role')}</li>
+          ${st.c && !rf ? `<li><span class="pc-k">Valid until</span>${fmtDate(st.c.expiresAt)}</li>` : ''}
+        </ul>
+        <div class="noprint pcta">${cta}</div></article>`;
     }).join('') : `<div class="card empty">No training has been assigned to you yet.</div>`}
     </div>
     ${person.eventIds.length === 0 && !req.length ? '' : `<p class="small muted" style="margin-top:22px">Your answers and completion are recorded so ${esc(db.settings.short)} can show that everyone serving has been trained. See the <a href="https://www.suni.co.uk" target="_blank" rel="noopener">Privacy Notice</a>.</p>`}
@@ -4030,14 +4084,13 @@ function renderPlayer(person, pathway, stepParam) {
   if (isNaN(idx) || idx < 0) idx = firstOpen;
   const step = steps[idx];
   const kindLabel = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz', attest: 'Attestation' };
-  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me">${ICON.back} My training</a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
+  app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me" data-back="#/me">${ICON.back} <span class="tb-txt">My training</span></a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
     <aside id="paside">
-      <div class="eyebrow">Safeguarding training</div>
       <h2 class="ptitle">${esc(pathway.title)}</h2>
       <button class="stepmini" data-act="steps" aria-expanded="false" aria-controls="steplist">
         <span class="sm-dots">${steps.map((s, i) => `<i class="${s.type !== 'attest' && stepDone(pr, s) ? 'd' : ''} ${i === idx ? 'c' : ''}"></i>`).join('')}</span>
-        <span class="sm-txt"><span class="k">Step ${idx + 1} of ${steps.length} · ${kindLabel[step.type]}</span><b>${esc(step.title)}</b></span>
+        <span class="sm-txt"><b>Step ${idx + 1} of ${steps.length}</b><span class="k">${kindLabel[step.type]}</span></span>
         <span class="sm-chev">All steps <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></span></button>
       <ol class="steps" id="steplist">${steps.map((s, i) => {
         const done = s.type !== 'attest' && stepDone(pr, s); const lock = i > firstOpen;
@@ -4054,7 +4107,7 @@ function renderPlayer(person, pathway, stepParam) {
   ({ video: stageVideo, read: stageRead, quiz: stageQuiz, attest: stageAttest })[step.type](stage, { person, pathway, pr, step, next, idx });
 }
 
-const stepHead = (kind, title, sub = '') => `<div class="eyebrow">${kind}</div><h2 style="margin:4px 0 6px">${esc(title)}</h2>${sub ? `<p class="muted">${sub}</p>` : ''}`;
+const stepHead = (kind, title, sub = '') => `<h2 class="stage-h" style="margin:0 0 6px">${esc(title)}</h2>${sub ? `<p class="muted">${sub}</p>` : ''}`;
 
 /* ---------- demo controls ---------- */
 const demoOn = () => db.settings.demoControls !== false;
@@ -4636,7 +4689,7 @@ const pageHead = (eyebrow, title, sub, actions = '') => {
   const keep = phone ? (rest.length <= 1 && !primary ? rest.length : rest.length === 1 ? 1 : 0) : rest.length <= 3 ? rest.length : 2;
   const shown = rest.slice(0, keep), more = rest.slice(keep);
   return `<div class="pagehead">${back ? `<a class="backlink noprint" href="${back.getAttribute('href')}" data-back="${back.dataset.back}">${ICON.back.replace('<svg', '<svg width="16" height="16"')} Back</a>` : ''}
-    <div class="ph-main"><div class="ph-text"><div class="eyebrow">${eyebrow}</div><h1 class="ph-h1">${title}</h1>${sub ? `<div class="muted ph-sub">${sub}</div>` : ''}</div>
+    <div class="ph-main"><div class="ph-text"><h1 class="ph-h1">${title}</h1>${sub ? `<div class="muted ph-sub">${sub}</div>` : ''}</div>
     ${shown.length + more.length || primary ? `<div class="ph-acts noprint">${shown.map(e => e.outerHTML).join('')}${more.length ? moreMenu(more, shown.length ? 'More' : phone && primary ? 'More' : 'Actions') : ''}${primary ? primary.outerHTML : ''}</div>` : ''}</div></div>`;
 };
 const avatar = p => `<span class="avatar" style="background:${avatarColour(p.name)}">${initials(p.name)}</span>`;
@@ -5836,7 +5889,7 @@ function composeEmail(people, { title = 'Email people', ruleId = '', ctxFor = ()
   if (!event) { const e0 = ctxFor(people[0])?.event; if (e0) event = e0; }
   const load = () => { const r = RULE(rid); subj = r ? r.subject : 'News about your safeguarding training'; body = r ? r.body : `Hi {first_name},\n\n`; };
   load();
-  const s = modal(`<header><div><div class="eyebrow">Email</div><h2 style="margin-top:4px">${esc(title)}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>${esc(title)}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body compose">
       <div>
         ${note ? `<div class="notice info small" style="margin-bottom:12px">${ICON.info}<div>${note}</div></div>` : ''}
@@ -6053,7 +6106,7 @@ function exportAuditReport() {
 /* ---------- CSV bulk import (first_name, last_name, email) ---------- */
 const SAMPLE_IMPORT = () => ['first_name,last_name,email', 'Sam,Irwin,sam.irwin@example.com', 'Niamh,Doherty,niamh.doherty@example.com', `Hannah,Doyle-Reid,hannah.doyle@example.com`, 'Laura,Kerr,laura.kerr@example.com', 'Ben,Hutchinson,ben.hutchinson@example', ',Smith,j.smith@example.com', 'Sam,Irwin,SAM.IRWIN@example.com'].join('\n');
 function importPeople() {
-  const s = modal(`<header><div><div class="eyebrow">Bulk import</div><h2 style="margin-top:4px">Import volunteers from CSV</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>Import volunteers from CSV</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
   <div class="body" id="imbody"><p class="muted small" style="margin-top:0">Columns: <code>first_name, last_name, email</code> (optional: <code>roles</code>, <code>events</code> — separate several with <code>;</code>). Existing emails are updated — their training history is never touched. Archived volunteers in the file can be reactivated. Have the <b>complete</b> list? <button class="linkbtn dark" id="tosync">Sync a full list instead</button> — it also archives anyone who’s no longer on it.</p>
     <div class="dropzone" id="dz"><b>Drop a CSV file here</b> or click to choose<input type="file" accept=".csv,text/csv" hidden id="fi"></div>
     <div class="row" style="margin-top:12px;gap:8px"><button class="btn ghost xs" id="tpl">${ICON.dl} Blank template</button><button class="btn ghost xs" id="smp">${ICON.dl} Sample file</button><button class="btn soft xs" id="smpgo">Try the sample now</button></div></div>`, 'wide');
@@ -6156,7 +6209,7 @@ function renderPrivacy() {
   $('#autoc').onchange = e => { db.settings.autoCleanup = e.target.checked; audit({ actor: 'admin', action: 'settings_saved', detail: { autoCleanup: e.target.checked } }); toast(e.target.checked ? 'Daily cleanup on' : 'Daily cleanup off'); };
   $('#runc').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to remove permanently')) return; const r = runCleanup('manual run'); toast(`Cleanup done: ${r.records} record${r.records === 1 ? '' : 's'}, ${r.vols} volunteer${r.vols === 1 ? '' : 's'}, ${r.logs} audit entr${r.logs === 1 ? 'y' : 'ies'} removed`); renderPrivacy(); };
   $$('[data-tbl]').forEach(b => b.onclick = () => { const rows = Store.table(b.dataset.tbl);
-    modal(`<header><div><div class="eyebrow">Table</div><h2 style="margin-top:4px"><code>${b.dataset.tbl}</code> <span class="muted" style="font-size:16px">${rows.length} rows</span></h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    modal(`<header><div><h2><code>${b.dataset.tbl}</code> <span class="muted" style="font-size:16px">${rows.length} rows</span></h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
       <div class="body"><p class="small muted" style="margin-top:0">First 5 rows, exactly as stored — the same shape the D1 Worker would return.</p><pre class="rowdump">${esc(JSON.stringify(rows.slice(-5).reverse(), null, 2))}</pre></div>`, 'wide'); });
   $('#scale').onclick = e => { if (db.people.length > 2500) { toast('Already at scale'); return; } if (!confirmInline(e.currentTarget, 'Click again — adds ~3,000 people')) return;
     const t0 = performance.now(); const back = d => new Date(Date.now() - d * DAY).toISOString();
@@ -6340,7 +6393,7 @@ function parseDay(v) { v = (v || '').trim(); let m;
   const d = new Date(v); return isNaN(d) ? '' : dayISO(d); }
 function batchEvents() {
   let rows = [{}, {}, {}].map(() => ({ name: '', date: '', endDate: '', location: '' }));
-  const s = modal(`<header><div><div class="eyebrow">Events</div><h2 style="margin-top:4px">Add several events</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>Add several events</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body">
       <details class="pastebox"><summary>Paste from a spreadsheet</summary><p class="tiny muted" style="margin:6px 0">One event per line: <code>name, start date, end date, location</code> — copy straight from Excel or Google Sheets. Dates like 05/07/2027 or 2027-07-05.</p>
         <textarea class="input" id="bpaste" rows="4" placeholder="Bangor Beach Mission 2027	12/07/2027	23/07/2027	Bangor"></textarea><button class="btn soft xs" id="bpgo" style="margin-top:8px">Add these rows</button></details>
@@ -6429,7 +6482,7 @@ function analyseSync(text, scope) {
   return out;
 }
 function rosterSync(preScope = 'volunteers') {
-  const s = modal(`<header><div><div class="eyebrow">People</div><h2 style="margin-top:4px">Sync a full list</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>Sync a full list</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body" id="sybody">
       <p class="small muted" style="margin-top:0">Upload or paste the <b>complete, current list</b> — for example at the start of a new year, or the final team for a camp. We compare it with what’s here and only change the differences. You’ll check everything before anything happens.</p>
       <div class="field"><label class="f">What is this a list of?</label><select class="input" id="syscope">${SYNC_SCOPES().map(([k, l]) => `<option value="${k}" ${k === preScope ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div class="help" id="syhelp"></div></div>
@@ -6516,7 +6569,7 @@ function applySync(a, sel) {
 }
 function syncDone(res, ev) {
   const line = [res.added && `${res.added} added`, res.joined && `${res.joined} added to the team`, res.updated && `${res.updated} updated`, res.reactivated && `${res.reactivated} reactivated`, res.archived && `${res.archived} archived`, res.removed && `${res.removed} taken off the team`].filter(Boolean);
-  const s = modal(`<header><div><div class="eyebrow">List synced</div><h2 style="margin-top:4px">${line.length ? 'Done — only the differences changed' : 'Nothing needed changing'}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>${line.length ? 'Done — only the differences changed' : 'Nothing needed changing'}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body"><ul class="small" style="margin:0;padding-left:18px;line-height:1.8">${line.map(l => `<li>${l}</li>`).join('')}</ul>
       <p class="tiny muted" style="margin:12px 0 0">Every change is in the audit log. Anyone else was left exactly as they were.</p></div>
     <footer><button class="btn ghost" id="syundo" style="margin-right:auto">Undo this sync</button><button class="btn red" data-close>Done</button></footer>`);

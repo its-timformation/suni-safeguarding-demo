@@ -47,7 +47,7 @@ const pageHead = (eyebrow, title, sub, actions = '') => {
   const keep = phone ? (rest.length <= 1 && !primary ? rest.length : rest.length === 1 ? 1 : 0) : rest.length <= 3 ? rest.length : 2;
   const shown = rest.slice(0, keep), more = rest.slice(keep);
   return `<div class="pagehead">${back ? `<a class="backlink noprint" href="${back.getAttribute('href')}" data-back="${back.dataset.back}">${ICON.back.replace('<svg', '<svg width="16" height="16"')} Back</a>` : ''}
-    <div class="ph-main"><div class="ph-text"><div class="eyebrow">${eyebrow}</div><h1 class="ph-h1">${title}</h1>${sub ? `<div class="muted ph-sub">${sub}</div>` : ''}</div>
+    <div class="ph-main"><div class="ph-text"><h1 class="ph-h1">${title}</h1>${sub ? `<div class="muted ph-sub">${sub}</div>` : ''}</div>
     ${shown.length + more.length || primary ? `<div class="ph-acts noprint">${shown.map(e => e.outerHTML).join('')}${more.length ? moreMenu(more, shown.length ? 'More' : phone && primary ? 'More' : 'Actions') : ''}${primary ? primary.outerHTML : ''}</div>` : ''}</div></div>`;
 };
 const avatar = p => `<span class="avatar" style="background:${avatarColour(p.name)}">${initials(p.name)}</span>`;
@@ -1247,7 +1247,7 @@ function composeEmail(people, { title = 'Email people', ruleId = '', ctxFor = ()
   if (!event) { const e0 = ctxFor(people[0])?.event; if (e0) event = e0; }
   const load = () => { const r = RULE(rid); subj = r ? r.subject : 'News about your safeguarding training'; body = r ? r.body : `Hi {first_name},\n\n`; };
   load();
-  const s = modal(`<header><div><div class="eyebrow">Email</div><h2 style="margin-top:4px">${esc(title)}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>${esc(title)}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body compose">
       <div>
         ${note ? `<div class="notice info small" style="margin-bottom:12px">${ICON.info}<div>${note}</div></div>` : ''}
@@ -1464,7 +1464,7 @@ function exportAuditReport() {
 /* ---------- CSV bulk import (first_name, last_name, email) ---------- */
 const SAMPLE_IMPORT = () => ['first_name,last_name,email', 'Sam,Irwin,sam.irwin@example.com', 'Niamh,Doherty,niamh.doherty@example.com', `Hannah,Doyle-Reid,hannah.doyle@example.com`, 'Laura,Kerr,laura.kerr@example.com', 'Ben,Hutchinson,ben.hutchinson@example', ',Smith,j.smith@example.com', 'Sam,Irwin,SAM.IRWIN@example.com'].join('\n');
 function importPeople() {
-  const s = modal(`<header><div><div class="eyebrow">Bulk import</div><h2 style="margin-top:4px">Import volunteers from CSV</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>Import volunteers from CSV</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
   <div class="body" id="imbody"><p class="muted small" style="margin-top:0">Columns: <code>first_name, last_name, email</code> (optional: <code>roles</code>, <code>events</code> — separate several with <code>;</code>). Existing emails are updated — their training history is never touched. Archived volunteers in the file can be reactivated. Have the <b>complete</b> list? <button class="linkbtn dark" id="tosync">Sync a full list instead</button> — it also archives anyone who’s no longer on it.</p>
     <div class="dropzone" id="dz"><b>Drop a CSV file here</b> or click to choose<input type="file" accept=".csv,text/csv" hidden id="fi"></div>
     <div class="row" style="margin-top:12px;gap:8px"><button class="btn ghost xs" id="tpl">${ICON.dl} Blank template</button><button class="btn ghost xs" id="smp">${ICON.dl} Sample file</button><button class="btn soft xs" id="smpgo">Try the sample now</button></div></div>`, 'wide');
@@ -1567,7 +1567,7 @@ function renderPrivacy() {
   $('#autoc').onchange = e => { db.settings.autoCleanup = e.target.checked; audit({ actor: 'admin', action: 'settings_saved', detail: { autoCleanup: e.target.checked } }); toast(e.target.checked ? 'Daily cleanup on' : 'Daily cleanup off'); };
   $('#runc').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to remove permanently')) return; const r = runCleanup('manual run'); toast(`Cleanup done: ${r.records} record${r.records === 1 ? '' : 's'}, ${r.vols} volunteer${r.vols === 1 ? '' : 's'}, ${r.logs} audit entr${r.logs === 1 ? 'y' : 'ies'} removed`); renderPrivacy(); };
   $$('[data-tbl]').forEach(b => b.onclick = () => { const rows = Store.table(b.dataset.tbl);
-    modal(`<header><div><div class="eyebrow">Table</div><h2 style="margin-top:4px"><code>${b.dataset.tbl}</code> <span class="muted" style="font-size:16px">${rows.length} rows</span></h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    modal(`<header><div><h2><code>${b.dataset.tbl}</code> <span class="muted" style="font-size:16px">${rows.length} rows</span></h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
       <div class="body"><p class="small muted" style="margin-top:0">First 5 rows, exactly as stored — the same shape the D1 Worker would return.</p><pre class="rowdump">${esc(JSON.stringify(rows.slice(-5).reverse(), null, 2))}</pre></div>`, 'wide'); });
   $('#scale').onclick = e => { if (db.people.length > 2500) { toast('Already at scale'); return; } if (!confirmInline(e.currentTarget, 'Click again — adds ~3,000 people')) return;
     const t0 = performance.now(); const back = d => new Date(Date.now() - d * DAY).toISOString();
@@ -1751,7 +1751,7 @@ function parseDay(v) { v = (v || '').trim(); let m;
   const d = new Date(v); return isNaN(d) ? '' : dayISO(d); }
 function batchEvents() {
   let rows = [{}, {}, {}].map(() => ({ name: '', date: '', endDate: '', location: '' }));
-  const s = modal(`<header><div><div class="eyebrow">Events</div><h2 style="margin-top:4px">Add several events</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>Add several events</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body">
       <details class="pastebox"><summary>Paste from a spreadsheet</summary><p class="tiny muted" style="margin:6px 0">One event per line: <code>name, start date, end date, location</code> — copy straight from Excel or Google Sheets. Dates like 05/07/2027 or 2027-07-05.</p>
         <textarea class="input" id="bpaste" rows="4" placeholder="Bangor Beach Mission 2027	12/07/2027	23/07/2027	Bangor"></textarea><button class="btn soft xs" id="bpgo" style="margin-top:8px">Add these rows</button></details>
@@ -1840,7 +1840,7 @@ function analyseSync(text, scope) {
   return out;
 }
 function rosterSync(preScope = 'volunteers') {
-  const s = modal(`<header><div><div class="eyebrow">People</div><h2 style="margin-top:4px">Sync a full list</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>Sync a full list</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body" id="sybody">
       <p class="small muted" style="margin-top:0">Upload or paste the <b>complete, current list</b> — for example at the start of a new year, or the final team for a camp. We compare it with what’s here and only change the differences. You’ll check everything before anything happens.</p>
       <div class="field"><label class="f">What is this a list of?</label><select class="input" id="syscope">${SYNC_SCOPES().map(([k, l]) => `<option value="${k}" ${k === preScope ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div class="help" id="syhelp"></div></div>
@@ -1927,7 +1927,7 @@ function applySync(a, sel) {
 }
 function syncDone(res, ev) {
   const line = [res.added && `${res.added} added`, res.joined && `${res.joined} added to the team`, res.updated && `${res.updated} updated`, res.reactivated && `${res.reactivated} reactivated`, res.archived && `${res.archived} archived`, res.removed && `${res.removed} taken off the team`].filter(Boolean);
-  const s = modal(`<header><div><div class="eyebrow">List synced</div><h2 style="margin-top:4px">${line.length ? 'Done — only the differences changed' : 'Nothing needed changing'}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><h2>${line.length ? 'Done — only the differences changed' : 'Nothing needed changing'}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body"><ul class="small" style="margin:0;padding-left:18px;line-height:1.8">${line.map(l => `<li>${l}</li>`).join('')}</ul>
       <p class="tiny muted" style="margin:12px 0 0">Every change is in the audit log. Anyone else was left exactly as they were.</p></div>
     <footer><button class="btn ghost" id="syundo" style="margin-right:auto">Undo this sync</button><button class="btn red" data-close>Done</button></footer>`);
