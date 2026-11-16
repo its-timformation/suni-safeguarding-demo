@@ -45,6 +45,7 @@ const ICON = {
   people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M17.5 14.6c2.3.3 3.7 1.9 4 4.4"/></svg>',
   cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>',
   path: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6H15a3.5 3.5 0 0 1 0 7H9a3.5 3.5 0 0 0 0 7h6.5"/></svg>',
+  mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></svg>',
   log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>',
   cog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   link: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg>',
@@ -62,7 +63,7 @@ const LOGO = (h = 40, white = false) => `<img src="${white ? window.SU_LOGO_WHIT
 const FLAME = (w = 34) => `<img src="${window.SU_FLAME}" alt="" aria-hidden="true" style="width:${w}px;height:auto;display:block">`;
 
 /* ---------- Store (swap point for a real backend) ---------- */
-const KEY = 'suni-safeguarding-demo-v9';
+const KEY = 'suni-safeguarding-demo-v10';
 const Store = {
   load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } },
   save(db) { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { console.warn(e); toast('Could not save — browser storage is full or blocked'); } },
@@ -257,6 +258,10 @@ function seed() {
   pm.steps['s-e2'] = { rev: essentials.steps[1].rev, attempts: [60, 40, 60].map((sc, i) => fakeAttempt(mark, essentials, essentials.steps[1], sc, back(5 - i * .4), markWeak)) };
   db.audit.push({ id: uid('a_'), at: back(4.1), personId: mark.id, actor: 'system', action: 'quiz_locked', pathwayId: essentials.id, version: 1, stepId: 's-e2', detail: { reason: 'Maximum attempts reached — flagged for follow-up' } });
   seedCrowd(essentials, leaders, back, complete);
+  db.emailRules = defaultRules(); db.outbox = [];
+  // a little history: last week's automatic reminders
+  db.people.filter(p => !p.featured).slice(0, 40).forEach((p, i) => { const r = db.emailRules[[1, 2, 4, 6][i % 4]]; const at = back(1 + (i % 9));
+    db.outbox.push({ id: uid('m_'), at, to: p.email, personId: p.id, subject: mergeText(r.subject, p, { training: 'Safeguarding Essentials', daysLeft: 30, expiry: addMonths(at, 1), event: EventById(p.eventIds[0]) }), body: mergeText(r.body, p, { training: 'Safeguarding Essentials', daysLeft: 30, expiry: addMonths(at, 1), event: EventById(p.eventIds[0]) }), source: 'automatic', ruleId: r.id, key: null, by: 'system' }); });
   db.audit.push({ id: uid('a_'), at: back(500), actor: 'admin', action: 'demo_seeded', detail: { note: 'Sample data created' } });
   db.audit.sort((a, b) => a.at.localeCompare(b.at));
   persist();
@@ -345,6 +350,7 @@ function route() {
   const restore = navBack ? scrollMem[cur] || 0 : 0; requestAnimationFrame(() => window.scrollTo({ top: restore }));
   if (parts[0] === 'i') return learnerRoute(parts.slice(1));
   if (parts[0] === 'verify') return renderVerify(parts[1], parts[2]);
+  if (parts[0] === 'inbox') return renderInbox(parts[1], parts[2]);
   if (parts[0] === 'admin') return adminRoute(parts.slice(1));
   return renderHub();
 }
@@ -457,7 +463,8 @@ function renderLearnerHome(person) {
   const evs = person.eventIds.map(EventById).filter(Boolean);
   const done = req.filter(p => ['complete', 'due'].includes(statusOf(person, p).key)).length;
   const allDone = req.length && done === req.length;
-  app().innerHTML = topbar(`<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span>`, `#/i/${person.token}`) +
+  const unread = (db.outbox || []).filter(m => m.personId === person.id && !(db.readMail || {})[m.id]).length;
+  app().innerHTML = topbar(`${demoOn() ? `<a class="btn ghost sm" href="#/inbox/${person.token}" title="Demo: see the emails this volunteer has been sent">📬 Demo inbox${unread ? ` <span class="ibbadge">${unread}</span>` : ''}</a>` : ''}<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span>`, `#/i/${person.token}`) +
     `<main class="wrap fadein">
     <div class="hero" style="margin-bottom:26px">
       <div class="flamebg">${FLAME(170)}</div>
@@ -851,7 +858,7 @@ function runQuiz(stage, ctx, st, auto) {
     st.attempts.push(attempt); if (passed) { st.done = true; st.at = now(); }
     audit({ personId: person.id, actor: 'learner', action: 'quiz_attempt', pathwayId: pathway.id, version: pathway.version, stepId: step.id, detail: { score, passed, attempt: st.attempts.filter(a => !a.voided).length, of: step.maxAttempts, questions: attempt.questions, ...(demo ? { demo: true } : {}) } });
     const fails = st.attempts.filter(a => !a.passed && !a.voided).length; const left = step.lock === false ? Infinity : step.maxAttempts - fails;
-    if (!passed && left <= 0) audit({ personId: person.id, actor: 'system', action: 'quiz_locked', pathwayId: pathway.id, version: pathway.version, stepId: step.id, detail: { reason: 'Maximum attempts reached — flagged for follow-up' } });
+    if (!passed && left <= 0) { audit({ personId: person.id, actor: 'system', action: 'quiz_locked', pathwayId: pathway.id, version: pathway.version, stepId: step.id, detail: { reason: 'Maximum attempts reached — flagged for follow-up' } }); autoEmail('locked', person, { training: pathway.title, key: now() }); }
     if (passed) confetti();
     stage.innerHTML = `<div class="result-hero fadein">
       <div class="eyebrow" style="color:${passed ? 'var(--teal)' : 'var(--red)'}">${passed ? 'Passed' : 'Not quite'}</div>
@@ -898,6 +905,7 @@ function stageAttest(stage, { person, pathway, pr }) {
     audit({ personId: person.id, actor: 'system', action: 'certificate_issued', pathwayId: pathway.id, version: pathway.version, detail: { certId, expiresAt: c.expiresAt } });
     // reset progress so the next renewal starts fresh (history stays in audit + completions)
     db.progress[person.id][pathway.id] = { steps: {}, startedAt: null, completedVersion: pathway.version, completedAt: at };
+    autoEmail('complete', person, { training: pathway.title, expiry: c.expiresAt, key: c.id });
     persist(); confetti();
     stage.innerHTML = completeScreen(person, c);
   };

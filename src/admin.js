@@ -3,7 +3,7 @@
    ===================================================================== */
 const NAV = [
   ['', 'Overview', 'grid'], ['people', 'People', 'people'], ['events', 'Events', 'cal'],
-  ['pathways', 'Pathways', 'path'], ['audit', 'Audit log', 'log'], ['settings', 'Settings', 'cog'],
+  ['pathways', 'Pathways', 'path'], ['emails', 'Emails', 'mail'], ['audit', 'Audit log', 'log'], ['settings', 'Settings', 'cog'],
 ];
 function adminShell(active, inner) {
   app().innerHTML = topbar(`<span class="small muted hide-sm">Signed in as <b>${esc(db.settings.adminName)}</b></span>`, '#/admin') +
@@ -20,6 +20,7 @@ function adminRoute(parts) {
   if (sec === 'events') return renderEvents();
   if (sec === 'pathways' && id) return renderPathwayEditor(id);
   if (sec === 'pathways') return renderPathways();
+  if (sec === 'emails') return renderEmails();
   if (sec === 'audit') return renderAudit();
   if (sec === 'settings') return renderSettings();
   if (sec === 'cert' && id) return renderCert(id, null);
@@ -47,7 +48,7 @@ function renderOverview() {
   const r = 54, C = 2 * Math.PI * r;
   const act = (n, label, sub, col, filter, icon) => `<a class="card kpi2" href="#/admin/people" data-pf='${JSON.stringify(filter)}'>
       <div class="row between"><span class="kdot" style="background:${col}1f;color:${col}">${icon}</span><span class="tiny muted">View ${ICON.arrow.replace('width="18" height="18"', 'width="14" height="14"')}</span></div>
-      <div class="kn" style="color:${n ? col : 'var(--muted)'}">${n}</div><div class="kl">${label}</div><div class="tiny muted">${sub}</div></a>`;
+      <div class="kn" style="color:${n ? col : 'var(--muted)'}">${n}</div><div class="kl">${label}</div><div class="tiny muted">${sub}</div>${n && filter.status !== 'locked' ? `<button class="btn soft xs kremind" data-kremind="${filter.status}">✉️ Remind all ${n}</button>` : ''}</a>`;
   const ST = [['complete', 'Complete', 'var(--teal)'], ['due', 'Due soon', 'var(--amber)'], ['progress', 'In progress', 'var(--sky)'], ['none', 'Not started', '#CFC8C0'], ['expired', 'Expired', 'var(--red)'], ['locked', 'Needs review', 'var(--plum)']];
   adminShell('', pageHead('Overview', 'Training at a glance', `${fmtDate(now())} · ${N} ${N === 1 ? 'person' : 'people'} · ${plural(db.pathways.length, 'pathway')} · ${plural(upcoming.length, 'upcoming event')}`,
     `<button class="btn ghost sm" data-x="register">${ICON.dl} Training register</button><button class="btn ghost sm" data-x="audit">${ICON.dl} Audit log</button>`) + `
@@ -81,6 +82,8 @@ function renderOverview() {
       <div class="card"><div class="row between" style="margin-bottom:6px"><h3>Recent activity</h3><a class="small" href="#/admin/audit">Audit log</a></div>${activityList(db.audit.slice(-10).reverse())}</div>
     </div>`);
   bindPf(); bindExports();
+  $$('[data-kremind]').forEach(b => b.onclick = e => { e.preventDefault(); e.stopPropagation(); const k = b.dataset.kremind; const ppl = live().filter(p => requiredPathwaysFor(p).some(pw => statusOf(p, pw).key === k));
+    composeEmail(ppl, { title: k === 'expired' ? 'Remind everyone whose training has expired' : 'Remind everyone due soon', ruleId: k === 'expired' ? 'r-expired' : 'r-expiring', ctxFor: p => { const x = requiredPathwaysFor(p).map(pw => ({ pw, st: statusOf(p, pw) })).find(y => y.st.key === k); return { training: x?.pw.title, expiry: x?.st.c?.expiresAt, daysLeft: x?.st.c ? Math.ceil((new Date(x.st.c.expiresAt) - Date.now()) / DAY) : '' }; } }); });
 }
 const ACTION_LABEL = {
   pathway_started: 'started', video_completed: 'finished the video', read_acknowledged: 'acknowledged a reading', quiz_attempt: 'took the quiz', quiz_locked: 'was flagged for review', attested: 'signed the attestation', certificate_issued: 'was issued a certificate',
@@ -94,6 +97,8 @@ function auditText(a) {
     case 'quiz_attempt': return `<b>${esc(who)}</b> took the quiz — ${d.score}% ${d.passed ? '<span class="chip st-complete">Pass</span>' : '<span class="chip st-expired">Not passed</span>'}${d.demo ? ' <span class="tag">demo</span>' : ''} <span class="muted">· ${esc(pw)}</span>`;
     case 'video_completed': return `<b>${esc(who)}</b> finished the video${d.demoSkip ? ' <span class="tag">demo skip</span>' : ''} <span class="muted">· ${esc(pw)}</span>`;
     case 'followup_recorded': return `<b>${esc(d.by)}</b> held a follow-up with <b>${esc(d.name || who)}</b> <span class="muted">· ${esc(d.how)} · ${esc(pw)}${d.reopened ? ' · quiz reopened' : ''}</span>${d.notes ? `<br><span class="tiny muted">“${esc(d.notes)}”</span>` : ''}`;
+    case 'email_sent': return `${a.actor === 'system' ? 'Automatic email' : 'Email'} to <b>${esc(d.name || who)}</b> <span class="muted">· “${esc(d.subject)}”</span>`;
+    case 'emails_sent': return `Admin sent <b>${d.count}</b> email${d.count === 1 ? '' : 's'} <span class="muted">· ${esc(d.template || d.subject || '')}</span>`;
     case 'person_archived': case 'person_restored': return `Admin ${a.action === 'person_archived' ? 'archived' : 'restored'} <b>${esc(d.name || who)}</b>`;
     case 'quiz_unlocked': case 'invite_copied': case 'person_added': case 'person_updated': case 'person_removed': return `Admin ${ACTION_LABEL[a.action]} <b>${esc(d.name || who)}</b>${pw ? ` <span class="muted">· ${esc(pw)}</span>` : ''}${d.changes ? ` <span class="muted">· ${esc(d.changes.join(', '))}</span>` : ''}`;
     case 'completion_recorded': return `Admin recorded a completion for <b>${esc(d.name || who)}</b> <span class="muted">· ${esc(pw)} · ${esc(d.method || '')}</span>${d.reason ? `<br><span class="tiny muted">“${esc(d.reason)}”</span>` : ''}`;
@@ -170,7 +175,7 @@ function renderPeople() {
   const f = peopleFilter; const ev = f.event && EventById(f.event);
   const count = t => t === 'all' ? live().length : t === 'archived' ? db.people.filter(p => p.archived).length : live().filter(p => typeOf(p) === t).length;
   adminShell('people', pageHead('People', 'People', 'Training is assigned automatically from each person’s roles and the events they’ve signed up for.',
-    `<button class="btn ghost sm" id="pprint">${ICON.print} Print list</button><button class="btn ghost sm" id="imp">Import CSV</button><button class="btn red sm" id="addp">+ Add person</button>`) + `
+    `<button class="btn ghost sm" id="pmail">✉️ Email these people</button><button class="btn ghost sm" id="pprint">${ICON.print} Print list</button><button class="btn ghost sm" id="imp">Import CSV</button><button class="btn red sm" id="addp">+ Add person</button>`) + `
     <div class="tabs" role="tablist">${[['all', 'Everyone'], ...TYPES, ['archived', 'Archived']].map(([k, l]) => `<button role="tab" class="${peopleTab === k ? 'on' : ''}" aria-selected="${peopleTab === k}" data-ptab="${k}">${l} <span>${count(k)}</span></button>`).join('')}</div>
     <div class="filters">
       <input class="input" placeholder="Search name, email or church…" id="pq" value="${esc(f.q)}" style="flex:1 1 240px">
@@ -192,12 +197,13 @@ function renderPeople() {
         <td>${p.eventIds.map(id => `<span class="tag nowrap">${esc(EventById(id)?.name || '')}</span>`).join('') || '<span class="muted">—</span>'}</td>
         <td style="min-width:110px"><div class="meter"><i style="width:${req.length ? done / req.length * 100 : 0}%"></i></div><span class="tiny muted">${done}/${req.length}</span></td>
         <td>${p.archived ? '<span class="chip st-none">Archived</span>' : worst ? chip(worst) : '<span class="tiny muted">Nothing assigned</span>'}</td>
-        <td class="rowacts"><button class="btn ghost xs" data-copy="${p.token}" title="Copy invite link">${ICON.link}</button><button class="btn ghost xs" data-edit="${p.id}">Edit</button><span class="chev">${ICON.arrow.replace('width="18" height="18"', 'width="16" height="16"')}</span></td></tr>`;
+        <td class="rowacts"><button class="btn ghost xs" data-remind="${p.id}" title="Send reminder email">✉️</button><button class="btn ghost xs" data-copy="${p.token}" title="Copy invite link">${ICON.link}</button><button class="btn ghost xs" data-edit="${p.id}">Edit</button><span class="chev">${ICON.arrow.replace('width="18" height="18"', 'width="16" height="16"')}</span></td></tr>`;
     }).join('') || '<tr><td colspan="6" class="empty">No one matches those filters</td></tr>'}</tbody></table></div>
     ${list.length > peopleShown ? `<div class="row" style="justify-content:center;margin-top:12px"><span class="small muted">Showing ${peopleShown} of ${list.length}</span><button class="btn ghost sm" id="pmore">Show 40 more</button></div>` : `<div class="small muted" style="text-align:center;margin-top:10px">${list.length} ${list.length === 1 ? 'person' : 'people'}</div>`}`;
     bindCopy();
     $$('[data-row]').forEach(tr => { const open = e => { if (e.target.closest('button,a')) return; go('#/admin/people/' + tr.dataset.row); }; tr.onclick = open; tr.onkeydown = e => e.key === 'Enter' && open(e); });
     $$('[data-edit]').forEach(b => b.onclick = e => { e.stopPropagation(); personPanel(Person(b.dataset.edit)); });
+    $$('[data-remind]').forEach(b => b.onclick = e => { e.stopPropagation(); sendReminder(Person(b.dataset.remind)); });
     $('#pmore') && ($('#pmore').onclick = () => { peopleShown += 40; draw(); });
   };
   draw(); bindPf();
@@ -213,6 +219,7 @@ function renderPeople() {
   $('#addp').onclick = () => personPanel();
   $('#imp').onclick = importPeople;
   $('#pprint').onclick = () => printPeopleList(filteredPeople());
+  $('#pmail').onclick = () => { const ppl = filteredPeople().filter(p => !p.archived); const ev = peopleFilter.event && EventById(peopleFilter.event); composeEmail(ppl, { title: 'Email this list', ctxFor: ev ? () => ({ event: ev }) : () => ({}), note: `Sending to the ${ppl.length} people in your current People view.` }); };
 }
 
 /* ---------- person side panel (add / edit) ---------- */
@@ -295,6 +302,7 @@ function personPanel(p, section = 'details') {
     if (isNew) {
       const np = { id: uid('u_'), token: uid('inv-'), createdAt: now(), ...Object.fromEntries(fields.map(k => [k, w[k]])) }; db.people.push(np);
       audit({ actor: 'admin', action: 'person_added', personId: np.id, detail: { name: np.name, type: np.type, roles: np.roles, events: np.eventIds } });
+      if (requiredPathwaysFor(np).length) autoEmail('assigned', np, { event: np.eventIds.map(EventById)[0], key: 'new' });
       try { await navigator.clipboard.writeText(location.href.split('#')[0] + '#/i/' + np.token); toast('Added — invite link copied'); } catch { toast('Added'); }
       closeDrawer(); go('#/admin/people/' + np.id); return;
     }
@@ -649,12 +657,13 @@ function renderPersonRecord(id) {
   };
   adminShell('people', `<div class="printable">` + pageHead(`<a href="#/admin/people">People</a> / Record`, `<span class="person" style="gap:14px">${avatar(p).replace('avatar"', 'avatar" style="width:48px;height:48px;font-size:17px;background:' + avatarColour(p.name) + '"')}${esc(p.name)}</span>`,
     `${esc(p.email)}${p.phone ? ` · ${esc(p.phone)}` : ''}${p.org ? ` · ${esc(p.org)}` : ''} · Added ${fmtDate(p.createdAt)}${p.archived ? ' · <b style="color:var(--red-600)">Archived</b>' : ''}<br><span class="typepill t-${typeOf(p)}">${typeOf(p)}</span>${p.accessNI?.status === 'cleared' ? '<span class="tag" style="background:var(--teal-50);color:var(--teal)">AccessNI cleared</span>' : p.accessNI?.status === 'applied' ? '<span class="tag" style="background:var(--amber-50)">AccessNI pending</span>' : ''}${p.roles.map(r => `<span class="tag">${esc(r)}</span>`).join('')}${p.eventIds.map(id => `<span class="tag" style="background:var(--sky-50)">${esc(EventById(id)?.name || '')}</span>`).join('')}`,
-    `<a class="btn ghost sm" href="#/admin/people" data-back="#/admin/people">${ICON.back} Back</a><button class="btn ghost sm" data-copy="${p.token}">${ICON.link} Invite link</button><a class="btn ghost sm" href="#/i/${p.token}">Open as volunteer</a><button class="btn ghost sm" id="prp">${ICON.print} Print record</button><button class="btn red sm" id="pe">Edit</button>`) + `
+    `<a class="btn ghost sm" href="#/admin/people" data-back="#/admin/people">${ICON.back} Back</a><button class="btn ghost sm" data-copy="${p.token}">${ICON.link} Invite link</button><a class="btn ghost sm" href="#/i/${p.token}">Open as volunteer</a><button class="btn ghost sm" id="prp">${ICON.print} Print record</button><button class="btn ghost sm" id="psend">✉️ Send reminder</button><a class="btn ghost sm" href="#/inbox/${p.token}">📬 Inbox</a><button class="btn red sm" id="pe">Edit</button>`) + `
     <div class="tabs noprint" role="tablist">${tabs.map(([k, l, n]) => `<button role="tab" aria-selected="${recordTab === k}" class="${recordTab === k ? 'on' : ''}" data-tab="${k}">${l} <span>${n}</span>${k === 'training' && lockedPws.length ? '<i class="tabdot"></i>' : ''}</button>`).join('')}</div>
     <div id="tabbody" class="fadein">${body[recordTab]()}</div></div>`);
   bindCopy();
   $('#pe').onclick = () => personPanel(p);
   $('#prp').onclick = () => printRecord(p);
+  $('#psend').onclick = () => { sendReminder(p); renderPersonRecord(id); };
   $$('[data-tab]').forEach(b => b.onclick = () => replaceHash(`#/admin/people/${id}${b.dataset.tab === 'training' ? '' : '/' + b.dataset.tab}`));
   $$('[data-att]').forEach(b => b.onclick = () => openAttempt(atts[+b.dataset.att], p));
   const C = id => db.completions.find(c => c.id === id);
@@ -697,7 +706,7 @@ function renderEventDetail(id) {
             <div class="tiny muted" style="margin-top:6px">${ST.filter(([k]) => cc[k]).map(([k, l]) => `${l} ${cc[k]}`).join(' · ')}</div></div>`; }).join('') || '<div class="empty">No training required — edit the event to add some.</div>'}</div>
     </div>
     <div class="row between" style="margin:26px 0 12px"><h2>Team <span class="muted" style="font-weight:600;font-size:18px">(${team.length})</span></h2>
-      <div class="row"><input class="input" id="evq" placeholder="Search team…" value="${esc(evFilter.q)}" style="width:220px;padding:9px 14px"><button class="btn ghost sm" id="evmail">Copy emails of people not ready</button></div></div>
+      <div class="row"><input class="input" id="evq" placeholder="Search team…" value="${esc(evFilter.q)}" style="width:220px;padding:9px 14px"><button class="btn ghost sm" id="evmail">Copy emails</button><button class="btn soft sm" id="evremind">✉️ Remind not ready (${team.filter(p => eventState(p, ev) !== 'ready').length})</button></div></div>
     <div class="tabs" style="margin-bottom:14px">${[['', 'Everyone', team.length], ['ready', 'Ready', c.ready], ['renew', 'Needs refresher', c.renew], ['todo', 'Not trained', c.todo]].map(([k, l, n]) => `<button class="${evFilter.ready === k ? 'on' : ''}" data-rf="${k}">${l} <span>${n}</span></button>`).join('')}</div>
     <div id="evlist"></div>`);
   const draw = () => {
@@ -723,6 +732,7 @@ function renderEventDetail(id) {
   $('#evmail').onclick = async () => { const em = team.filter(p => eventState(p, ev) !== 'ready').map(p => p.email); if (!em.length) { toast('Everyone is ready 🎉'); return; }
     try { await navigator.clipboard.writeText(em.join('; ')); toast(`${em.length} email addresses copied`); } catch { prompt('Copy these addresses:', em.join('; ')); } };
   $('#evadd').onclick = () => addToEvent(ev);
+  $('#evremind').onclick = () => composeEmail(team.filter(p => eventState(p, ev) !== 'ready'), { title: `Remind ${ev.name} team`, ruleId: 'r-event', ctxFor: () => ({ event: ev, training: ev.requiredPathways.map(id => P(id)?.title).filter(Boolean).join(' and ') }) });
 }
 function addToEvent(ev) {
   const pool = live().filter(p => !p.eventIds.includes(ev.id)).sort((a, b) => a.name.localeCompare(b.name)); const picked = new Set();
@@ -734,7 +744,7 @@ function addToEvent(ev) {
     $('#alist', s).innerHTML = pool.filter(p => !q || (p.name + ' ' + p.email + ' ' + p.roles.join(' ')).toLowerCase().includes(q)).slice(0, 60).map(p => `<label class="addrow"><input type="checkbox" value="${p.id}" ${picked.has(p.id) ? 'checked' : ''}>${avatar(p)}<span style="flex:1"><b>${esc(p.name)}</b><br><span class="tiny muted">${esc(p.roles.join(', '))}</span></span>${(() => { const s2 = eventState(p, ev); return `<span class="chip st-${s2 === 'ready' ? 'complete' : s2 === 'renew' ? 'due' : 'none'}" style="font-size:12px">${s2 === 'ready' ? 'Already trained' : s2 === 'renew' ? 'Needs refresher' : 'Needs training'}</span>`; })()}</label>`).join('') || '<div class="empty">No one found</div>';
     $$('#alist input', s).forEach(i => i.onchange = () => { i.checked ? picked.add(i.value) : picked.delete(i.value); $('#acount', s).textContent = picked.size ? `${picked.size} selected` : 'None selected'; $('#ago', s).disabled = !picked.size; }); };
   draw(); $('#aq', s).oninput = draw;
-  $('#ago', s).onclick = () => { picked.forEach(pid => { const p = Person(pid); p.eventIds.push(ev.id); audit({ actor: 'admin', action: 'person_updated', personId: p.id, detail: { name: p.name, changes: [`added to ${ev.name}`] } }); });
+  $('#ago', s).onclick = () => { picked.forEach(pid => { const p = Person(pid); p.eventIds.push(ev.id); audit({ actor: 'admin', action: 'person_updated', personId: p.id, detail: { name: p.name, changes: [`added to ${ev.name}`] } }); if (eventState(p, ev) !== 'ready') autoEmail('assigned', p, { event: ev, training: ev.requiredPathways.map(id => P(id)?.title).filter(Boolean).join(' and '), key: ev.id }); });
     toast(`${picked.size} added to ${ev.name}`); closeModal(); renderEventDetail(ev.id); };
 }
 
@@ -1046,6 +1056,195 @@ function renderSettings() {
   $('#reset').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to reset')) return; Store.clear(); seed(); draft = null; toast('Demo data reset'); go('#/admin'); };
   $('#restore').onclick = () => { const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json'; fi.onchange = async () => { try { const d = JSON.parse(await fi.files[0].text()); if (!d.pathways || !d.people) throw 0; db = d; audit({ actor: 'admin', action: 'data_imported', detail: { kind: 'backup' } }); toast('Backup restored'); route(); } catch { toast('That file isn’t a valid backup'); } }; fi.click(); };
   bindExports();
+}
+
+/* =====================================================================
+   EMAILS & REMINDERS (demo: emails are recorded in the outbox, not sent)
+   ===================================================================== */
+const MERGE = [['first_name', 'First name'], ['training', 'Training'], ['expiry_date', 'Expiry date'], ['days_left', 'Days left'], ['event', 'Event'], ['event_date', 'Event date'], ['link', 'Their training link'], ['dso_name', 'Safeguarding contact']];
+function defaultRules() {
+  return [
+    { id: 'r-assigned', kind: 'event', trigger: 'assigned', name: 'Training assigned', enabled: true, when: 'As soon as someone is added, or signs up to an event that needs training they haven’t done', subject: 'Your safeguarding training for {event}', body: `Hi {first_name},\n\nThank you for serving with us! Before you join us at {event}, please complete {training}. It takes about 15 minutes and you can stop and come back any time.\n\nIf you have any questions, just reply to this email.` },
+    { id: 'r-notstarted', kind: 'time', trigger: 'notstarted', name: 'Not started yet', enabled: true, days: [7], when: 'Days after training was assigned, if they haven’t started', subject: 'A reminder: {training}', body: `Hi {first_name},\n\nJust a gentle reminder that your {training} is still waiting for you. It only takes about 15 minutes.` },
+    { id: 'r-expiring', kind: 'time', trigger: 'expiring', name: 'Certificate expiring soon', enabled: true, days: [30, 7], when: 'Days before a certificate expires', subject: 'Your safeguarding certificate expires in {days_left} days', body: `Hi {first_name},\n\nYour {training} certificate runs out on {expiry_date}. Please take a few minutes to refresh it so you can keep serving.` },
+    { id: 'r-expired', kind: 'event', trigger: 'expired', name: 'Certificate expired', enabled: true, when: 'On the day a certificate expires', subject: 'Your safeguarding training has expired', body: `Hi {first_name},\n\nYour {training} certificate expired on {expiry_date}. You’ll need to renew it before you next serve with us.` },
+    { id: 'r-event', kind: 'time', trigger: 'event', name: 'Event coming up — not ready', enabled: true, days: [30, 14], when: 'Days before an event, to anyone on the team who isn’t ready', subject: '{event} is coming up — your training', body: `Hi {first_name},\n\n{event} starts on {event_date} and we’re looking forward to having you. Your safeguarding training isn’t complete for that date yet — please finish {training} before then.` },
+    { id: 'r-locked', kind: 'event', trigger: 'locked', name: 'Quiz locked', enabled: true, when: 'When someone uses all their quiz attempts (copied to the safeguarding contact)', subject: 'Your safeguarding quiz — we’ll be in touch', body: `Hi {first_name},\n\nThanks for working through {training}. As you’ve used all your quiz attempts, {dso_name} will be in touch within a few days for a short chat, then we’ll reopen it for you. Nothing else to do for now.` },
+    { id: 'r-complete', kind: 'event', trigger: 'complete', name: 'Training complete', enabled: true, when: 'When someone signs off their training', subject: 'Thank you — {training} complete', body: `Hi {first_name},\n\nThank you for completing {training}. Your certificate is valid until {expiry_date} and you can view or download it any time from your training page.` },
+  ];
+}
+const RULE = id => (db.emailRules ||= defaultRules()).find(r => r.id === id);
+const trainLink = p => (publicBase() || location.href.split('#')[0]) + '#/i/' + p.token;
+function mergeText(t, p, ctx = {}) {
+  const v = { first_name: firstName(p.name), name: p.name, training: ctx.training || requiredPathwaysFor(p).map(x => x.title).join(' and ') || 'your safeguarding training', expiry_date: ctx.expiry ? fmtDate(ctx.expiry) : '', days_left: ctx.daysLeft ?? '', event: ctx.event?.name || p.eventIds.map(id => EventById(id)?.name).filter(Boolean)[0] || 'SUNI', event_date: ctx.event ? fmtDate(ctx.event.date) : '', link: trainLink(p), dso_name: db.settings.dsoName || 'our safeguarding team' };
+  return String(t).replace(/\{(\w+)\}/g, (m, k) => v[k] ?? m);
+}
+function emailHTML(subject, body, p) {
+  const paras = esc(body).split(/\n\n+/).map(x => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('');
+  return `<div class="em"><div class="em-head">${LOGO(34)}</div><div class="em-bar"></div><div class="em-body"><h2>${esc(subject)}</h2>${paras}
+    <a class="em-btn" href="${esc(trainLink(p))}" target="_blank" rel="noopener">Go to my training</a>
+    <p class="em-small">Or copy this link: ${esc(trainLink(p))}</p></div>
+    <div class="em-foot">Scripture Union Northern Ireland · Charity NIC104852<br>You’re getting this because you’re serving with SUNI. Questions? Just reply.</div></div>`;
+}
+/* who is due each automatic reminder right now */
+function dueFor(rule) {
+  const out = []; const sent = new Set((db.outbox || []).map(o => o.key).filter(Boolean)); const now = Date.now();
+  const add = (p, ctx, key) => { if (!sent.has(key)) out.push({ p, ctx, key }); };
+  live().forEach(p => requiredPathwaysFor(p).forEach(pw => {
+    const st = statusOf(p, pw), c = latestCompletion(p.id, pw.id);
+    if (rule.trigger === 'expiring' && c && !c.expiresAt.startsWith('9999')) { const dl = Math.ceil((new Date(c.expiresAt) - now) / DAY); const th = [...rule.days].sort((a, b) => a - b).find(d => dl > 0 && dl <= d); if (th != null) add(p, { training: pw.title, expiry: c.expiresAt, daysLeft: dl }, `${rule.id}|${p.id}|${c.id}|${th}`); }
+    if (rule.trigger === 'expired' && st.key === 'expired' && st.c) add(p, { training: pw.title, expiry: st.c.expiresAt }, `${rule.id}|${p.id}|${st.c.id}`);
+    if (rule.trigger === 'notstarted' && st.key === 'none' && now - new Date(p.createdAt) > rule.days[0] * DAY) add(p, { training: pw.title }, `${rule.id}|${p.id}|${pw.id}`);
+    if (rule.trigger === 'locked' && st.key === 'locked') add(p, { training: pw.title }, `${rule.id}|${p.id}|${pw.id}|${lockInfo(p, pw)?.lockedAt || ''}`);
+  }));
+  if (rule.trigger === 'event') db.events.forEach(ev => { const dl = Math.ceil((new Date(ev.date) - now) / DAY); const th = [...rule.days].sort((a, b) => a - b).find(d => dl > 0 && dl <= d); if (th == null) return;
+    live().filter(p => p.eventIds.includes(ev.id) && eventState(p, ev) !== 'ready').forEach(p => add(p, { event: ev, training: ev.requiredPathways.map(id => P(id)?.title).filter(Boolean).join(' and '), daysLeft: dl }, `${rule.id}|${p.id}|${ev.id}|${th}`)); });
+  // one email per person per rule run
+  const seen = new Set(); return out.filter(x => !seen.has(x.p.id) && seen.add(x.p.id));
+}
+function sendEmails(items, { subject, body, source, ruleId = null }) {
+  db.outbox ||= []; const at = now();
+  items.forEach(({ p, ctx = {}, key }) => {
+    const sj = mergeText(subject, p, ctx), bd = mergeText(body, p, ctx);
+    db.outbox.push({ id: uid('m_'), at, to: p.email, personId: p.id, subject: sj, body: bd, source, ruleId, key: key || null, by: source === 'automatic' ? 'system' : db.settings.adminName });
+    db.audit.push({ id: uid('a_'), at, personId: p.id, actor: source === 'automatic' ? 'system' : 'admin', action: 'email_sent', detail: { name: p.name, subject: sj, source, rule: ruleId && RULE(ruleId)?.name } });
+  });
+  persist(); if (items.length) mailPop(db.outbox.slice(-items.length)); return items.length;
+}
+/* demo: show sent emails in the browser */
+function mailPop(msgs) {
+  let wrap = $('#mailpops'); if (!wrap) { wrap = document.createElement('div'); wrap.id = 'mailpops'; document.body.appendChild(wrap); }
+  const m = msgs[msgs.length - 1], p = Person(m.personId);
+  const el = document.createElement('div'); el.className = 'mailpop';
+  el.innerHTML = `<div class="mp-ic">${ICON.mail}</div><div class="mp-txt"><div class="mp-k">${msgs.length > 1 ? `${msgs.length} emails sent` : `Email sent · ${m.source === 'automatic' ? 'automatic' : 'just now'}`}</div><b>${esc(m.subject)}</b><div class="tiny muted">To ${esc(p?.name || m.to)}${msgs.length > 1 ? ` and ${msgs.length - 1} more` : ''}</div>
+    <div class="row" style="gap:6px;margin-top:8px"><button class="btn red xs" data-mpv>Preview</button>${p ? `<button class="btn ghost xs" data-mpi>Open ${esc(firstName(p.name))}’s inbox</button>` : ''}</div></div><button class="iconbtn mp-x" aria-label="Dismiss">${ICON.x}</button>`;
+  wrap.prepend(el); while (wrap.children.length > 3) wrap.lastChild.remove();
+  const kill = () => { el.classList.add('out'); setTimeout(() => el.remove(), 250); };
+  const t = setTimeout(kill, 9000); el.onmouseenter = () => clearTimeout(t);
+  $('.mp-x', el).onclick = kill; $('[data-mpv]', el).onclick = () => { kill(); viewEmail(m); };
+  $('[data-mpi]', el) && ($('[data-mpi]', el).onclick = () => { kill(); go('#/inbox/' + p.token + '/' + m.id); });
+}
+/* demo: a mail-app style inbox for one person */
+function renderInbox(token, mid) {
+  const p = db.people.find(x => x.token === token); if (!p) return go('#/');
+  const mails = (db.outbox || []).filter(m => m.personId === p.id).slice().reverse();
+  const cur = mails.find(m => m.id === mid) || mails[0];
+  const read = (db.readMail ||= {});
+  if (cur) { read[cur.id] = 1; persist(); }
+  app().innerHTML = `<div class="inbox"><header class="ib-top"><div class="row" style="gap:12px">${ICON.mail.replace('<svg', '<svg width="22" height="22"')}<b>Inbox</b><span class="muted small">${esc(p.email)}</span></div>
+      <div class="row" style="gap:8px"><span class="tag" style="background:var(--amber-50)">Demo inbox — not a real mailbox</span><a class="btn ghost sm" href="#/admin/people/${p.id}" data-back="#/admin/people/${p.id}">${ICON.back} Back</a></div></header>
+    <div class="ib-body"><aside class="ib-list">${mails.map(m => `<a class="ib-item ${cur && m.id === cur.id ? 'on' : ''} ${read[m.id] ? '' : 'unread'}" href="#/inbox/${p.token}/${m.id}"><div class="row between"><b>Scripture Union NI</b><span class="tiny muted">${fmtDate(m.at)}</span></div><div class="ib-sub">${esc(m.subject)}</div><div class="ib-snip">${esc(m.body.replace(/\s+/g, ' ').slice(0, 90))}…</div></a>`).join('') || '<div class="empty">No emails yet.<br><span class="small">Send a reminder from the admin area to see one arrive.</span></div>'}</aside>
+      <main class="ib-read">${cur ? `<div class="ib-meta"><h2>${esc(cur.subject)}</h2><div class="small muted">From <b>Scripture Union NI</b> &lt;training@suni.co.uk&gt; · to ${esc(p.name)} · ${fmtDT(cur.at)}</div></div>${emailHTML(cur.subject, cur.body, p)}` : ''}</main></div></div>` + demobar('');
+  const btn = $('.ib-read .em-btn'); if (btn) { btn.removeAttribute('target'); btn.setAttribute('href', '#/i/' + p.token); }
+}
+/* fire an event-based rule straight away (called from actions around the app) */
+function autoEmail(trigger, p, ctx = {}) {
+  const r = (db.emailRules || []).find(x => x.trigger === trigger); if (!r || !r.enabled || !p) return;
+  sendEmails([{ p, ctx, key: `${r.id}|${p.id}|${ctx.key || now()}` }], { subject: r.subject, body: r.body, source: 'automatic', ruleId: r.id });
+}
+/* pick the right one-click reminder for someone's situation */
+function reminderFor(p) {
+  const req = requiredPathwaysFor(p); const sts = req.map(pw => ({ pw, st: statusOf(p, pw) }));
+  const pick = k => sts.find(x => x.st.key === k);
+  let x;
+  if ((x = pick('expired'))) return { rule: RULE('r-expired'), ctx: { training: x.pw.title, expiry: x.st.c?.expiresAt } };
+  if ((x = pick('due'))) return { rule: RULE('r-expiring'), ctx: { training: x.pw.title, expiry: x.st.c.expiresAt, daysLeft: Math.ceil((new Date(x.st.c.expiresAt) - Date.now()) / DAY) } };
+  if ((x = pick('none') || pick('progress'))) { const ev = p.eventIds.map(EventById).find(e => e && e.requiredPathways.includes(x.pw.id)); return { rule: ev ? RULE('r-event') : RULE('r-notstarted'), ctx: { training: x.pw.title, event: ev } }; }
+  if ((x = pick('locked'))) return null;
+  return null;
+}
+function sendReminder(p) {
+  const r = reminderFor(p);
+  if (!r) { toast(requiredPathwaysFor(p).length ? `${firstName(p.name)} is up to date — nothing to remind` : 'No training assigned'); return; }
+  sendEmails([{ p, ctx: r.ctx }], { subject: r.rule.subject, body: r.rule.body, source: 'manual', ruleId: r.rule.id });
+  toast(`Reminder sent to ${p.name}`);
+}
+/* compose / bulk send */
+function composeEmail(people, { title = 'Email people', ruleId = '', ctxFor = () => ({}), note = '' } = {}) {
+  if (!people.length) { toast('No one to email'); return; }
+  let rid = ruleId || 'custom'; let subj = '', body = '';
+  const load = () => { const r = RULE(rid); subj = r ? r.subject : 'News about your safeguarding training'; body = r ? r.body : `Hi {first_name},\n\n`; };
+  load();
+  const s = modal(`<header><div><div class="eyebrow">${people.length} ${people.length === 1 ? 'person' : 'people'}</div><h2 style="margin-top:4px">${esc(title)}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body compose">
+      <div>
+        ${note ? `<div class="notice info small" style="margin-bottom:12px">${ICON.info}<div>${note}</div></div>` : ''}
+        <div class="recips">${people.slice(0, 8).map(p => `<span class="tag">${esc(p.name)}</span>`).join('')}${people.length > 8 ? `<span class="tag">+${people.length - 8} more</span>` : ''}</div>
+        <div class="field"><label class="f">Template</label><select class="input" id="ctpl"><option value="custom">Custom message</option>${db.emailRules.map(r => `<option value="${r.id}" ${rid === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></div>
+        <div class="field"><label class="f">Subject</label><input class="input" id="csub"></div>
+        <div class="field"><label class="f">Message</label><textarea class="input" id="cbody" style="min-height:200px"></textarea>
+          <div class="mergechips">${MERGE.map(([k, l]) => `<button type="button" data-merge="${k}" title="Insert ${l}">{${k}}</button>`).join('')}</div></div>
+      </div>
+      <div><div class="tiny muted" style="margin-bottom:6px">Preview for <select id="cwho" class="input" style="display:inline-block;width:auto;padding:4px 30px 4px 8px;font-size:13px">${people.slice(0, 30).map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join('')}</select></div><div id="cprev"></div></div>
+    </div>
+    <footer><span class="small muted" style="margin-right:auto;align-self:center">Demo: recorded in the email log, not actually sent</span><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="csend">Send to ${people.length} ${people.length === 1 ? 'person' : 'people'}</button></footer>`, 'wide');
+  const fill = () => { $('#csub', s).value = subj; $('#cbody', s).value = body; prev(); };
+  const prev = () => { const p = people[+$('#cwho', s).value || 0]; $('#cprev', s).innerHTML = emailHTML(mergeText($('#csub', s).value, p, ctxFor(p)), mergeText($('#cbody', s).value, p, ctxFor(p)), p); };
+  fill();
+  $('#ctpl', s).onchange = e => { rid = e.target.value; load(); fill(); };
+  $('#csub', s).oninput = prev; $('#cbody', s).oninput = prev; $('#cwho', s).onchange = prev;
+  $$('[data-merge]', s).forEach(b => b.onclick = () => { const ta = $('#cbody', s), t = `{${b.dataset.merge}}`, i = ta.selectionStart ?? ta.value.length; ta.value = ta.value.slice(0, i) + t + ta.value.slice(ta.selectionEnd ?? i); ta.focus(); ta.selectionStart = ta.selectionEnd = i + t.length; prev(); });
+  $('#csend', s).onclick = () => { const sj = $('#csub', s).value.trim(), bd = $('#cbody', s).value.trim(); if (!sj || !bd) { toast('Add a subject and message'); return; }
+    const n = sendEmails(people.map(p => ({ p, ctx: ctxFor(p) })), { subject: sj, body: bd, source: rid === 'custom' ? 'ad-hoc' : 'manual', ruleId: rid === 'custom' ? null : rid });
+    audit({ actor: 'admin', action: 'emails_sent', detail: { count: n, subject: sj, template: rid === 'custom' ? 'Custom' : RULE(rid)?.name } });
+    closeModal(); toast(`${n} email${n === 1 ? '' : 's'} sent`); route(); };
+}
+function viewEmail(m) {
+  const p = Person(m.personId) || { name: m.to, token: '' };
+  modal(`<header><div><div class="eyebrow">${m.source === 'automatic' ? 'Automatic · ' + esc(RULE(m.ruleId)?.name || '') : m.source === 'ad-hoc' ? 'Ad-hoc email' : 'Sent by ' + esc(m.by)}</div><h2 style="margin-top:4px">${esc(m.subject)}</h2><div class="small muted">To ${esc(p.name)} &lt;${esc(m.to)}&gt; · ${fmtDT(m.at)}</div></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body">${emailHTML(m.subject, m.body, p)}</div><footer><button class="btn ghost" data-close>Close</button></footer>`, 'wide');
+}
+let outboxShown = 30, outboxQ = '';
+function renderEmails() {
+  db.emailRules ||= defaultRules(); db.outbox ||= [];
+  const due = Object.fromEntries(db.emailRules.filter(r => r.kind === 'time' || ['expired', 'locked'].includes(r.trigger)).map(r => [r.id, r.enabled ? dueFor(r) : []]));
+  const totalDue = Object.values(due).reduce((n, l) => n + l.length, 0);
+  adminShell('emails', pageHead('Emails', 'Emails & reminders', 'Automatic reminders go out on their own; you can also send one-off emails to anyone.',
+    `<button class="btn ghost sm" id="ecomp">✉️ Compose email</button><button class="btn red sm" id="erun" ${totalDue ? '' : 'disabled'}>Send due reminders (${totalDue})</button>`) + `
+    <div class="notice info small" style="margin-bottom:18px">${ICON.info}<div><b>Demo:</b> emails are recorded in the log below but not actually sent. In the live version, automatic reminders run every morning and send through an email service (e.g. Postmark or Resend).</div></div>
+    <h2 style="margin-bottom:12px">Automatic reminders</h2>
+    <div class="grid g2" style="margin-bottom:28px">${db.emailRules.map(r => `<div class="card rulecard ${r.enabled ? '' : 'off'}">
+      <div class="row between" style="align-items:flex-start;flex-wrap:nowrap;gap:14px"><div><div class="row" style="gap:8px"><span class="tag" style="background:${r.kind === 'time' ? 'var(--sky-50)' : 'var(--plum-50)'};color:${r.kind === 'time' ? '#2F7C84' : 'var(--plum)'}">${r.kind === 'time' ? 'Time-based' : 'When it happens'}</span></div>
+        <h3 style="margin:8px 0 4px">${esc(r.name)}</h3><div class="small muted">${esc(r.when)}${r.days ? `: <b style="color:var(--ink)">${r.days.map(d => d + (r.trigger === 'notstarted' ? ' days after' : ' days before')).join(', ')}</b>` : ''}</div></div>
+        <label class="switch"><input type="checkbox" data-rtog="${r.id}" ${r.enabled ? 'checked' : ''}><span></span></label></div>
+      <div class="small" style="margin-top:12px;padding:10px 12px;background:#FBFAF8;border-radius:10px"><span class="muted">Subject:</span> ${esc(r.subject)}</div>
+      <div class="row between" style="margin-top:12px">${due[r.id] ? `<span class="small ${due[r.id].length ? '' : 'muted'}">${due[r.id].length ? `<b>${due[r.id].length}</b> due now` : 'No one due right now'}</span>` : `<span class="small muted">Sends automatically</span>`}
+        <div class="row" style="gap:6px">${due[r.id]?.length ? `<button class="btn soft xs" data-rsend="${r.id}">Send ${due[r.id].length}</button>` : ''}<button class="btn ghost xs" data-redit="${r.id}">Edit</button></div></div></div>`).join('')}</div>
+    <div class="row between" style="margin-bottom:12px"><h2>Sent <span class="muted" style="font-weight:600;font-size:18px">(${db.outbox.length})</span></h2><input class="input" id="eq" placeholder="Search name or subject…" value="${esc(outboxQ)}" style="width:240px;padding:9px 14px"></div>
+    <div id="elog"></div>`);
+  const draw = () => { const list = db.outbox.slice().reverse().filter(m => !outboxQ || (m.to + ' ' + m.subject + ' ' + (Person(m.personId)?.name || '')).toLowerCase().includes(outboxQ.toLowerCase()));
+    $('#elog').innerHTML = `<div class="tablewrap"><table class="clickable"><thead><tr><th>Sent</th><th>To</th><th>Subject</th><th>Type</th></tr></thead><tbody>${list.slice(0, outboxShown).map((m, i) => `<tr data-mail="${m.id}"><td class="nowrap small">${fmtDT(m.at)}</td><td><b>${esc(Person(m.personId)?.name || m.to)}</b><br><span class="tiny muted">${esc(m.to)}</span></td><td>${esc(m.subject)}</td><td>${m.source === 'automatic' ? `<span class="tag" style="background:var(--sky-50)">Auto · ${esc(RULE(m.ruleId)?.name || '')}</span>` : m.source === 'ad-hoc' ? '<span class="tag" style="background:var(--plum-50)">Ad-hoc</span>' : `<span class="tag">Manual${m.ruleId ? ' · ' + esc(RULE(m.ruleId)?.name || '') : ''}</span>`}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Nothing sent yet</td></tr>'}</tbody></table></div>
+      ${list.length > outboxShown ? `<div class="row" style="justify-content:center;margin-top:12px"><button class="btn ghost sm" id="emore">Show more</button></div>` : ''}`;
+    $$('[data-mail]').forEach(tr => tr.onclick = () => viewEmail(db.outbox.find(m => m.id === tr.dataset.mail)));
+    $('#emore') && ($('#emore').onclick = () => { outboxShown += 30; draw(); }); };
+  draw();
+  $('#eq').oninput = e => { outboxQ = e.target.value; outboxShown = 30; draw(); };
+  $$('[data-rtog]').forEach(t => t.onchange = () => { const r = RULE(t.dataset.rtog); r.enabled = t.checked; audit({ actor: 'admin', action: 'settings_saved', detail: { reminder: r.name, enabled: r.enabled } }); toast(`${r.name}: ${r.enabled ? 'on' : 'off'}`); renderEmails(); });
+  $$('[data-redit]').forEach(b => b.onclick = () => editRule(RULE(b.dataset.redit)));
+  $$('[data-rsend]').forEach(b => b.onclick = () => { const r = RULE(b.dataset.rsend); const n = sendEmails(due[r.id], { subject: r.subject, body: r.body, source: 'automatic', ruleId: r.id }); audit({ actor: 'admin', action: 'emails_sent', detail: { count: n, template: r.name } }); toast(`${n} “${r.name}” email${n === 1 ? '' : 's'} sent`); renderEmails(); });
+  $('#erun').onclick = () => { let n = 0; db.emailRules.forEach(r => { if (due[r.id]?.length) n += sendEmails(due[r.id], { subject: r.subject, body: r.body, source: 'automatic', ruleId: r.id }); }); audit({ actor: 'admin', action: 'emails_sent', detail: { count: n, template: 'All due reminders' } }); toast(`${n} reminder${n === 1 ? '' : 's'} sent`); renderEmails(); };
+  $('#ecomp').onclick = () => { const s = modal(`<header><h2>Who should get this email?</h2><button class="iconbtn" data-close>${ICON.x}</button></header><div class="body stack">
+      ${[['all', 'Everyone (active)', live().length], ['attention', 'Anyone needing attention (expired, due soon, locked)', live().filter(p => requiredPathwaysFor(p).some(pw => ['expired', 'due', 'locked'].includes(statusOf(p, pw).key))).length], ['notdone', 'Anyone not fully trained', live().filter(p => !personCompliant(p)).length], ...db.events.map(e => ['ev:' + e.id, `Team: ${e.name}`, live().filter(p => p.eventIds.includes(e.id)).length]), ...TYPES.map(([k, l]) => ['type:' + k, l, live().filter(p => typeOf(p) === k).length])].map(([k, l, n]) => `<button class="radiorow" data-aud="${k}" style="width:100%;text-align:left;background:#fff"><span style="flex:1"><b>${esc(l)}</b></span><span class="tag">${n}</span></button>`).join('')}
+      <p class="tiny muted">Tip: you can also email any filtered list from the People page.</p></div>`);
+    $$('[data-aud]', s).forEach(b => b.onclick = () => { const k = b.dataset.aud; const ppl = k === 'all' ? live() : k === 'attention' ? live().filter(p => requiredPathwaysFor(p).some(pw => ['expired', 'due', 'locked'].includes(statusOf(p, pw).key))) : k === 'notdone' ? live().filter(p => !personCompliant(p)) : k.startsWith('ev:') ? live().filter(p => p.eventIds.includes(k.slice(3))) : live().filter(p => typeOf(p) === k.slice(5));
+      const ev = k.startsWith('ev:') && EventById(k.slice(3)); closeModal(); composeEmail(ppl, { title: b.textContent.trim().replace(/\d+$/, ''), ctxFor: ev ? () => ({ event: ev }) : () => ({}) }); }); };
+}
+function editRule(r) {
+  const p = live()[0];
+  const s = modal(`<header><div><div class="eyebrow">${r.kind === 'time' ? 'Time-based reminder' : 'Sent when it happens'}</div><h2 style="margin-top:4px">${esc(r.name)}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body compose"><div>
+      <p class="small muted" style="margin-top:0">${esc(r.when)}.</p>
+      ${r.days ? `<div class="field"><label class="f">${r.trigger === 'notstarted' ? 'Send after (days)' : 'Send (days before)'}</label><input class="input" id="rdays" value="${r.days.join(', ')}" placeholder="e.g. 30, 7"><div class="help">Separate several with commas — each person gets one email at each point.</div></div>` : ''}
+      <div class="field"><label class="f">Subject</label><input class="input" id="rsub" value="${esc(r.subject)}"></div>
+      <div class="field"><label class="f">Message</label><textarea class="input" id="rbody" style="min-height:200px">${esc(r.body)}</textarea><div class="mergechips">${MERGE.map(([k, l]) => `<button type="button" data-merge="${k}" title="Insert ${l}">{${k}}</button>`).join('')}</div></div>
+    </div><div><div class="tiny muted" style="margin-bottom:6px">Preview (${esc(p?.name || '')})</div><div id="rprev"></div></div></div>
+    <footer><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="rsave">Save</button></footer>`, 'wide');
+  const ctx = { training: 'Safeguarding Essentials', expiry: addMonths(now(), 1), daysLeft: 30, event: db.events[0] };
+  const prev = () => { $('#rprev', s).innerHTML = emailHTML(mergeText($('#rsub', s).value, p, ctx), mergeText($('#rbody', s).value, p, ctx), p); };
+  prev(); $('#rsub', s).oninput = prev; $('#rbody', s).oninput = prev;
+  $$('[data-merge]', s).forEach(b => b.onclick = () => { const ta = $('#rbody', s), t = `{${b.dataset.merge}}`, i = ta.selectionStart ?? ta.value.length; ta.value = ta.value.slice(0, i) + t + ta.value.slice(ta.selectionEnd ?? i); ta.focus(); prev(); });
+  $('#rsave', s).onclick = () => { if ($('#rdays', s)) { const d = $('#rdays', s).value.split(/[,\s]+/).map(Number).filter(n => n > 0); if (!d.length) { toast('Add at least one number of days'); return; } r.days = [...new Set(d)].sort((a, b) => b - a); }
+    r.subject = $('#rsub', s).value.trim(); r.body = $('#rbody', s).value; audit({ actor: 'admin', action: 'settings_saved', detail: { reminder: r.name, days: r.days, subject: r.subject } }); closeModal(); toast('Reminder saved'); renderEmails(); };
 }
 
 /* ---------- boot ---------- */
