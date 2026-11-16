@@ -22,7 +22,7 @@ const addMonths = (d, m) => { const x = new Date(d); x.setMonth(x.getMonth() + m
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
 const initials = n => n.split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase();
-const avatarColour = n => ['#D63744', '#239084', '#E9A337', '#6C4C70', '#2F7C84', '#C2577A'][parseInt(hash(n), 36) % 6];
+const avatarColour = n => ['#C8303D', '#1B766C', '#A6600C', '#6C4C70', '#24666D', '#B04468'][parseInt(hash(n), 36) % 6];
 const firstName = n => n.split(' ')[0];
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -254,7 +254,7 @@ function seed() {
     ],
   };
   const leaders = {
-    id: 'p-leaders', title: 'Leading at Camps & Missions', colour: '#239084',
+    id: 'p-leaders', title: 'Leading at Camps & Missions', colour: '#1B766C',
     summary: 'For leaders on residential camps and missions: responding to disclosures, safe practice and working together.',
     validityMonths: 12, requiredForRoles: ['Camp Leader', 'Mission Team'], active: true, version: 1,
     attestation: 'I confirm that I have completed this training personally and will follow the Code of Conduct and safeguarding procedures at every SUNI camp or mission I serve on.',
@@ -437,6 +437,16 @@ function route() {
   if (parts[0] === 'admin') return adminRoute(parts.slice(1));
   return renderHub();
 }
+/* after each navigation: update the tab title, announce the page and move focus to it */
+let _firstRoute = true, _phone = innerWidth < 620;
+addEventListener('resize', () => { const ph = innerWidth < 620; if (ph !== _phone) { _phone = ph; if (!document.querySelector('#scrim,#drawer')) { route.keepFocus = true; route(); route.keepFocus = false; } } });
+addEventListener('hashchange', () => setTimeout(() => {
+  const h = document.querySelector('main h1'); const t = h ? h.textContent.replace(/\s+/g, ' ').trim() : '';
+  document.title = (t ? t + ' · ' : '') + 'SUNI Safeguarding Training';
+  if (_firstRoute) { _firstRoute = false; }
+  const live = document.getElementById('srlive'); if (live && t) live.textContent = t;
+  if (!route.keepFocus && !document.querySelector('#scrim,#drawer')) { const m = document.querySelector('main'); m?.focus({ preventScroll: true }); }
+}, 60));
 function go(h) { if (location.hash === h) route(); else location.hash = h; }
 
 /* topbar: on phones the logo shrinks to the flame, a Back button becomes an icon,
@@ -445,7 +455,7 @@ function topbar(right = '', home = '#/') {
   let back = ''; right = right.replace(/<a class="btn ghost sm[^"]*" href="[^"]*" data-back="[^"]*">[\s\S]*?<\/a>/, m => { back = m; return ''; });
   const menu = (right.match(/class="btn /g) || []).length > 2 || right.includes('tb-nav');
   return `<div class="topbar ${menu ? 'hasmenu' : ''}"><div class="in">
-    <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30)}</span><span class="brand-div"></span><span class="brand-lbl"><small>Safeguarding</small><b>Training</b></span></a>
+    <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30).replace('alt="" aria-hidden="true"', 'alt="Scripture Union NI Safeguarding Training — home"')}</span><span class="brand-div"></span><span class="brand-lbl"><small>Safeguarding</small> <b>Training</b></span></a>
     <div class="spacer"></div>${back ? `<span class="tb-back">${back}</span>` : ''}<div class="tb-acts">${right}</div>${menu ? `<button class="iconbtn tb-more" data-act="tbmenu" aria-label="Menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>` : ''}</div></div>`;
 }
 function demobar(active) {
@@ -458,7 +468,7 @@ function demobar(active) {
       return `<a href="#/inbox/${v.token}" class="db-inbox" title="Demo: the emails ${esc(firstName(v.name))} has been sent">📬 Inbox${n ? ` <span class="ibbadge">${n}</span>` : ''}</a>`; })()}</nav>`;
 }
 function previewBanner() { const s = Session.get('vol'); return s?.preview ? `<div class="previewbar noprint">👁 Admin preview — you’re seeing exactly what ${esc(Person(s.volunteer_id)?.name || '')} sees. <button class="btn xs" data-act="logout">Exit preview</button></div>` : ''; }
-function worriedFab() { return `<button class="fab noprint" data-act="worried">${'<span class="pulse">' + ICON.heart + '</span>'}<span class="lbl">Worried about a child?</span></button>`; }
+function worriedFab() { return `<button class="fab noprint" data-act="worried" aria-label="Worried about a child? Get help">${'<span class="pulse">' + ICON.heart + '</span>'}<span class="lbl">Worried about a child?</span></button>`; }
 function showWorried() {
   const s = db.settings;
   modal(`<header><h2>Worried about a child?</h2><button class="iconbtn" data-close>${ICON.x}</button></header>
@@ -483,20 +493,67 @@ function showWorried() {
 function modal(html, cls = '') {
   closeModal();
   const s = document.createElement('div'); s.className = 'scrim'; s.id = 'scrim';
+  if (!modalReturn) modalReturn = document.activeElement;
   s.innerHTML = `<div class="modal ${cls}" role="dialog" aria-modal="true">${html}</div>`;
   s.addEventListener('click', e => { if (e.target === s || e.target.closest('[data-close]')) closeModal(); });
   document.body.appendChild(s);
-  setTimeout(() => $('input,textarea,select,button.btn', s)?.focus(), 30);
+  a11yPass(s); setTimeout(() => ($('.body input:not([type=checkbox]):not([type=radio]),.body textarea,.body select', s) || $('.modal', s)).focus?.(), 30); $('.modal', s).tabIndex = -1;
   return s;
 }
-function closeModal() { $('#scrim')?.remove(); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+let modalReturn = null;
+function closeModal() { const s = $('#scrim'); if (!s) return; s.remove(); if (modalReturn && document.contains(modalReturn)) modalReturn.focus(); modalReturn = null; }
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if ($('#emenu')) { $('#emenu').remove(); return; }
+    const mm = $('.moremenu:not([hidden])'); if (mm) { mm.hidden = true; mm.previousElementSibling.setAttribute('aria-expanded', 'false'); mm.previousElementSibling.focus(); return; }
+    if ($('#scrim')) { closeModal(); return; }
+    if ($('#drawer')) { closeDrawer?.(); return; }
+    const tb = $('.topbar.open'); if (tb) { tb.classList.remove('open'); $('.tb-more', tb)?.setAttribute('aria-expanded', 'false'); $('.tb-more', tb)?.focus(); return; }
+    $('.demobar.open')?.classList.remove('open');
+  }
+  // arrow keys move through an open "More" menu
+  if (['ArrowDown', 'ArrowUp'].includes(e.key)) { const m = document.activeElement?.closest('.moremenu'); if (m) { e.preventDefault(); const it = $$('.mitem', m), i = it.indexOf(document.activeElement); it[(i + (e.key === 'ArrowDown' ? 1 : -1) + it.length) % it.length].focus(); } }
+  // keep keyboard focus inside an open dialog or drawer
+  if (e.key === 'Tab') { const box = $('#scrim .modal') || $('#drawer .drawer'); if (!box) return;
+    const f = $$(FOCUSABLE, box).filter(x => x.offsetParent !== null); if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); } }
+});
+/* ---------- accessibility pass: runs after every render ----------
+   labels icon-only controls, ties form labels to their fields, names dialogs,
+   hides decorative SVGs from screen readers and keeps <main> focusable for the skip link */
+function a11yPass(root = document) {
+  root.querySelectorAll('button,a[href],[role=button]').forEach(b => { if (b.getAttribute('aria-label') || b.getAttribute('aria-labelledby')) return; const t = b.textContent.replace(/\s+/g, ' ').trim();
+    if (!t || /^[×✕▾▴⋯←→]+$/.test(t)) { const l = b.title || (b.matches('[data-close],[data-dclose],.mp-x,[data-x],[data-sx]') ? 'Close' : b.matches('[data-rmr]') ? 'Remove row' : b.matches('[data-rm]') ? 'Remove from event' : b.matches('[data-copy]') ? 'Copy sign-in link' : null); if (l) b.setAttribute('aria-label', l); } });
+  root.querySelectorAll('button:not([type])').forEach(b => { if (!b.closest('form')) b.type = 'button'; });
+  root.querySelectorAll('.field').forEach(f => { const lab = f.querySelector(':scope > label.f'), ctl = f.querySelector('input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea');
+    if (lab && ctl && !lab.htmlFor && !lab.contains(ctl)) { ctl.id ||= uid('f_'); lab.htmlFor = ctl.id; } });
+  root.querySelectorAll('input:not([type=hidden]),select,textarea').forEach(i => { if (i.labels?.length || i.getAttribute('aria-label') || i.getAttribute('aria-labelledby')) return;
+    const l = i.placeholder || i.title || i.closest('tr')?.querySelector('b')?.textContent; if (l) i.setAttribute('aria-label', (i.type === 'checkbox' ? 'Select ' : '') + l.trim()); });
+  root.querySelectorAll('[role=dialog]').forEach(d => { if (d.getAttribute('aria-labelledby') || d.getAttribute('aria-label')) return; const h = d.querySelector('h1,h2'); if (h) { h.id ||= uid('h_'); d.setAttribute('aria-labelledby', h.id); } });
+  root.querySelectorAll('.segbar a,.segbar button').forEach(a => { a.tabIndex = -1; a.setAttribute('aria-hidden', 'true'); });
+  root.querySelectorAll('.tablewrap').forEach(w => { if (w.hasAttribute('tabindex')) return; w.tabIndex = 0; w.setAttribute('role', 'region'); const h = w.previousElementSibling?.matches?.('h2,h3') ? w.previousElementSibling : w.closest('.card,section,#adm')?.querySelector('h2,h1'); w.setAttribute('aria-label', (h?.textContent.trim() || 'Table') + ' (scrolls sideways)'); });
+  root.querySelectorAll('.segbar[role=img]').forEach(b => { b.removeAttribute('role'); b.setAttribute('aria-hidden', 'true'); });   // the legend beside it carries the same numbers and links
+  root.querySelectorAll('td input:not([type=checkbox]),td select').forEach(i => { if (i.labels?.length || i.getAttribute('aria-label')) return; const td = i.closest('td'), th = td.closest('table')?.querySelectorAll('thead th')[td.cellIndex]; if (th?.textContent.trim()) i.setAttribute('aria-label', th.textContent.trim()); });
+  root.querySelectorAll('.switch input').forEach(i => { if (i.getAttribute('aria-label')) return; const n = i.closest('.card,.row,label')?.parentElement?.querySelector('h3') || i.closest('label')?.parentElement?.querySelector('.muted'); i.setAttribute('aria-label', (n?.textContent || 'On or off').trim()); });
+  root.querySelectorAll('select').forEach(x => { if (!x.labels?.length && !x.getAttribute('aria-label')) x.setAttribute('aria-label', x.options[0]?.textContent.replace(/^(All|Any) /, 'Filter: ') || 'Choose'); });
+  root.querySelectorAll('input[type=checkbox],input[type=radio]').forEach(x => { if (x.labels?.length && x.labels[0].textContent.trim() || x.getAttribute('aria-label')) return;
+    const n = x.closest('.card,.dtrain,tr,.row')?.querySelector('h3,b'); if (n) x.setAttribute('aria-label', n.textContent.trim()); });
+  root.querySelectorAll('svg:not([role]):not([aria-hidden])').forEach(x => x.setAttribute('aria-hidden', 'true'));
+  root.querySelectorAll('img:not([alt])').forEach(x => x.setAttribute('alt', ''));
+  const m = document.querySelector('main'); if (m && !m.id) { m.id = 'main'; m.tabIndex = -1; }
+}
+let _a11yQ = false;
+new MutationObserver(() => { if (_a11yQ) return; _a11yQ = true; requestAnimationFrame(() => { _a11yQ = false; a11yPass(); }); }).observe(document.documentElement, { childList: true, subtree: true });
 
 /* ---------- confetti ---------- */
 function confetti() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const c = $('#confetti'), x = c.getContext('2d'); c.width = innerWidth; c.height = innerHeight;
-  const cols = ['#D63744', '#E9A337', '#239084', '#80C2C8', '#6C4C70'];
+  const cols = ['#D63744', '#E9A337', '#1B766C', '#80C2C8', '#6C4C70'];
   const ps = Array.from({ length: 160 }, () => ({ x: innerWidth / 2 + (Math.random() - .5) * 200, y: innerHeight * .35, vx: (Math.random() - .5) * 16, vy: -Math.random() * 14 - 4, s: 5 + Math.random() * 6, r: Math.random() * 6, vr: (Math.random() - .5) * .3, c: cols[Math.floor(Math.random() * 5)] }));
   let t = 0; (function f() {
     x.clearRect(0, 0, c.width, c.height); t++;
@@ -667,7 +724,7 @@ function learnerRoute(parts) {
   if (parts[0] === 'cert' && parts[1]) { const c = db.completions.find(x => x.id === parts[1]); if (!c || c.personId !== person.id) return replaceHash('#/me'); return renderCert(parts[1], person); }
   renderLearnerHome(person);
 }
-const REFRESH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
+const REFRESH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16"/><path d="M3 21v-5h5"/><path d="M3 12A9 9 0 0 1 18.4 5.6L21 8"/><path d="M21 3v5h-5"/></svg>';
 /* what a learner needs to know about renewing: expiring soon, expired, or reset by an admin */
 function refreshInfo(person, pw, st) {
   if (st.key === 'due') return { kind: 'due', title: `Refresher due by ${fmtDate(st.c.expiresAt)}`, text: `Your certificate is still valid, but it runs out in ${Math.max(1, Math.ceil((new Date(st.c.expiresAt) - Date.now()) / DAY))} days. Refresh it now so you can keep serving.` };
@@ -677,8 +734,10 @@ function refreshInfo(person, pw, st) {
   return null;
 }
 function refreshRing(kind, pct) {
-  const col = kind === 'due' ? 'var(--amber)' : 'var(--red)'; const r = 28, c = 2 * Math.PI * r;
-  return `<div class="ring rring ${kind}"><svg width="68" height="68"><circle cx="34" cy="34" r="${r}" stroke="#EFEAE4" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${col}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${kind === 'due' ? '6 6' : c}" stroke-dashoffset="${kind === 'due' ? 0 : c * (1 - pct / 100)}"/></svg><b style="color:${col}">${pct && kind !== 'due' ? pct + '%' : kind === 'expired' ? '!' : REFRESH_SVG}</b></div>`;
+  const col = kind === 'due' ? '#C98208' : 'var(--red)', bg = kind === 'due' ? 'var(--amber-50)' : 'var(--red-50)';
+  const label = kind === 'due' ? 'Refresher due' : kind === 'expired' ? 'Expired' : 'Needs redoing';
+  if (pct) { const r = 28, c = 2 * Math.PI * r; return `<div class="ring rring" role="img" aria-label="${label}, ${pct}% done"><svg width="68" height="68" aria-hidden="true"><circle cx="34" cy="34" r="${r}" stroke="${bg}" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${col}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}"/></svg><b style="color:${col}">${pct}%</b></div>`; }
+  return `<div class="rbadge ${kind}" role="img" aria-label="${label}">${kind === 'expired' ? '<b>!</b>' : REFRESH_SVG}</div>`;
 }
 function ring(pct, colour = 'var(--red)') {
   const r = 28, c = 2 * Math.PI * r;
@@ -702,7 +761,7 @@ function renderLearnerHome(person) {
     ${(() => { const rn = evs.filter(e => eventState(person, e) === 'renew'); if (!rn.length) return '';
       const exp = Math.min(...rn.flatMap(e => e.requiredPathways.map(pid => +new Date(latestCompletion(person.id, pid).expiresAt))));
       return `<div class="notice warn" style="margin-bottom:18px">${ICON.info}<div><b>Heads up:</b> a certificate of yours runs out on ${fmtDate(exp)}, before <b>${rn.map(e => esc(e.name)).join('</b> and <b>')}</b>. You’ll be able to refresh it from ${fmtDate(exp - (db.settings.dueSoonDays || 30) * DAY)}.</div></div>`; })()}
-    <div class="row between" style="margin-bottom:12px"><h2>Your training</h2><span class="muted small">${done} of ${req.length} up to date${refreshN ? ` · <b style="color:#A86A0C">${refreshN} to refresh</b>` : ''}</span></div>
+    <div class="row between" style="margin-bottom:12px"><h2>Your training</h2><span class="muted small">${done} of ${req.length} up to date${refreshN ? ` · <b style="color:#8A5508">${refreshN} to refresh</b>` : ''}</span></div>
     <div class="grid" style="gap:14px">
     ${req.length ? req.map(p => {
       const st = statusOf(person, p); const pr = prog(person.id, p.id);
@@ -720,7 +779,7 @@ function renderLearnerHome(person) {
           <p class="muted small" style="margin:0 0 6px">${esc(p.summary)}</p>
           <div class="tiny muted">${p.steps.map(s => ICON[s.type].replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')).join(' ')} &nbsp;${plural(p.steps.length, 'step')} + sign-off · Required for ${esc(why.join(', ') || 'your role')}${st.c ? ` · Valid until ${fmtDate(st.c.expiresAt)}` : ''}</div>
         </div>
-        <div class="noprint" style="text-align:right">${cta}</div></div>`;
+        <div class="noprint pcta">${cta}</div></div>`;
     }).join('') : `<div class="card empty">No training has been assigned to you yet.</div>`}
     </div>
     ${person.eventIds.length === 0 && !req.length ? '' : `<p class="small muted" style="margin-top:22px">Your answers and completion are recorded so ${esc(db.settings.short)} can show that everyone serving has been trained. See the <a href="https://www.suni.co.uk" target="_blank" rel="noopener">Privacy Notice</a>.</p>`}
@@ -803,9 +862,9 @@ function customPlayer(frame, { url, poster, vtt, title, start = 0, getLimit, onT
     <div class="vp-cc" aria-live="off"></div>
     <button class="vp-big" aria-label="Play"><span class="vp-ring"></span><span class="vp-ico">${VP.play}</span><span class="vp-lbl">Play</span></button>
     <div class="vp-bar">
-      <div class="vp-track" role="slider" aria-label="Seek" tabindex="-1"><div class="vp-rail"><i class="vp-watched"></i><i class="vp-played"></i></div><span class="vp-thumb"></span><span class="vp-tip"></span></div>
+      <div class="vp-track" role="slider" aria-label="Video position" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0:00"><div class="vp-rail"><i class="vp-watched"></i><i class="vp-played"></i></div><span class="vp-thumb"></span><span class="vp-tip"></span></div>
       <div class="vp-tools">
-        ${cues.length ? `<button class="vp-btn vp-ccb" aria-label="Captions" aria-pressed="false" title="Captions (C)"><b>CC</b></button>` : ''}
+        ${cues.length ? `<button class="vp-btn vp-ccb" aria-label="CC captions" aria-pressed="false" title="Captions (C)"><b aria-hidden="true">CC</b></button>` : ''}
         <span class="vp-volwrap"><input class="vp-volr" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume"><button class="vp-btn vp-vol" aria-label="Mute" title="Mute (M)">${VP.vol}</button></span>
         <button class="vp-btn vp-fs" aria-label="Full screen" title="Full screen (F)">${VP.fs}</button>
       </div>
@@ -850,6 +909,7 @@ function customPlayer(frame, { url, poster, vtt, title, start = 0, getLimit, onT
   document.addEventListener('fullscreenchange', fsChange);
   // scrubber: drag anywhere you've already watched
   const track = q('.vp-track');
+  v.addEventListener('timeupdate', () => { const d = v.duration || 0; track.setAttribute('aria-valuemax', Math.round(d)); track.setAttribute('aria-valuenow', Math.round(v.currentTime)); track.setAttribute('aria-valuetext', `${tfmt(v.currentTime)} of ${tfmt(d)}`); });
   const tAt = e => { const r = track.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (v.duration || 0); };
   let drag = false;
   track.addEventListener('pointerdown', e => { drag = true; track.setPointerCapture(e.pointerId); seekTo(tAt(e)); frame.classList.add('scrub'); });
@@ -966,7 +1026,7 @@ function stageRead(stage, { person, pathway, pr, step, next }) {
   stage.innerHTML = stepHead('Read & acknowledge', step.title) + `<div class="reading" id="rd">${md(step.body)}</div>
     ${step.link?.url ? `<p><a href="${esc(step.link.url)}" target="_blank" rel="noopener" class="btn ghost sm">${ICON.link} ${esc(step.link.label || 'Open document')}</a></p>` : ''}
     <div class="card" style="background:#FBFAF8;box-shadow:none;margin-top:22px">
-      <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start"><input type="checkbox" id="ack" ${done ? 'checked disabled' : ''} style="width:22px;height:22px;accent-color:var(--red);margin-top:2px"><span style="font-weight:600">${esc(step.ackText || 'I have read and understood this.')}</span></label>
+      <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start"><input type="checkbox" id="ack" ${done ? 'checked disabled' : ''} style="width:22px;height:22px;accent-color:var(--red-600);margin-top:2px"><span style="font-weight:600">${esc(step.ackText || 'I have read and understood this.')}</span></label>
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn red" id="rnext" ${done ? '' : 'disabled'}>Continue ${ICON.arrow}</button></div>`;
   $('#ack').onchange = e => { $('#rnext').disabled = !e.target.checked; };
@@ -1117,7 +1177,7 @@ function stageAttest(stage, { person, pathway, pr }) {
   if (freshCompletion) { stage.innerHTML = completeScreen(person, st.c); return; }
   stage.innerHTML = stepHead('Sign-off', 'Attestation', 'This is your record that you completed the training yourself.') + `
     <div class="card" style="background:#FBFAF8;box-shadow:none">
-      <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start"><input type="checkbox" id="atck" style="width:22px;height:22px;accent-color:var(--red);margin-top:2px"><span style="font-weight:600">${esc(pathway.attestation)}</span></label>
+      <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start"><input type="checkbox" id="atck" style="width:22px;height:22px;accent-color:var(--red-600);margin-top:2px"><span style="font-weight:600">${esc(pathway.attestation)}</span></label>
       <div class="field" style="margin:18px 0 0">
         <label class="f" for="atname">Type your full name to sign</label>
         <input class="input" id="atname" autocomplete="name" placeholder="${esc(person.name)}" style="font-size:18px;font-weight:700">
@@ -1258,9 +1318,11 @@ function renderVerify(certId, payload) {
 
 /* global delegated actions */
 document.addEventListener('click', e => {
+  if (!e.target.closest('[data-act=more]')) document.querySelectorAll('.moremenu:not([hidden])').forEach(m => { m.hidden = true; m.previousElementSibling?.setAttribute('aria-expanded', 'false'); });
   const bk = e.target.closest('[data-back]'); if (bk) { e.preventDefault(); appBack(bk.dataset.back); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act === 'worried') showWorried();
+  if (a.dataset.act === 'more') { const m = a.nextElementSibling, open = m.hidden; document.querySelectorAll('.moremenu').forEach(x => { x.hidden = true; x.previousElementSibling?.setAttribute('aria-expanded', 'false'); }); m.hidden = !open; a.setAttribute('aria-expanded', open); if (open) m.querySelector('.mitem')?.focus(); return; }
   if (a.dataset.act === 'tbmenu') { const t = a.closest('.topbar'); const o = t.classList.toggle('open'); a.setAttribute('aria-expanded', o); }
   if (a.dataset.act === 'demobar') a.closest('.demobar').classList.toggle('open');
   if (a.dataset.act === 'steps') { const o = $('#paside').classList.toggle('open'); a.setAttribute('aria-expanded', o); }

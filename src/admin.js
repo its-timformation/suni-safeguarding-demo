@@ -34,7 +34,22 @@ const SEG = [['ready', 'Ready', 'var(--teal)'], ['renew', 'Needs refresher', 'va
 const readyBar = (c, evId) => c.total ? `<div class="segbar" role="img" aria-label="${SEG.map(([k, l]) => `${c[k]} ${l}`).join(', ')}">${SEG.map(([k, l, col]) => c[k] ? `<a href="#/admin/people" data-pf='${JSON.stringify({ event: evId, ready: k })}' style="flex:${c[k]};background:${col}" title="${c[k]} ${l} — click to see who"></a>` : '').join('')}</div>` : '<div class="segbar empty"></div>';
 const readyLegend = (c, evId) => `<div class="seglegend">${SEG.map(([k, l, col]) => `<a href="#/admin/people" data-pf='${JSON.stringify({ event: evId, ready: k })}'><span class="sw" style="background:${col}"></span>${l} <b>${c[k]}</b></a>`).join('')}</div>`;
 function bindPf() { $$('[data-pf]').forEach(a => a.onclick = e => { e.preventDefault(); peopleFilter = { ...PF0, ...JSON.parse(a.dataset.pf) }; peoplePage = 1; go('#/admin/people'); }); }
-const pageHead = (eyebrow, title, sub, actions = '') => `<div class="pagehead"><div><div class="eyebrow">${eyebrow}</div><h1 style="font-size:32px;margin-top:4px">${title}</h1>${sub ? `<p class="muted">${sub}</p>` : ''}</div><div class="row noprint">${actions}</div></div>`;
+/* page header: a small Back link, one primary action, up to two secondary ones, and the rest in a "More" menu
+   (on phones: primary + More). Buttons keep their ids, so handlers bound after render still work. */
+function moreMenu(items, label = 'More') {
+  return `<div class="more"><button class="btn ghost sm" data-act="more" aria-haspopup="true" aria-expanded="false">${label} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="moremenu" role="menu" hidden>${items.map(e => { e.classList.remove('btn', 'ghost', 'sm', 'xs', 'soft', 'red', 'hide-sm'); e.classList.add('mitem'); e.setAttribute('role', 'menuitem'); return e.outerHTML; }).join('')}</div></div>`;
+}
+const pageHead = (eyebrow, title, sub, actions = '') => {
+  const t = document.createElement('template'); t.innerHTML = actions.trim(); const els = [...t.content.children];
+  const back = els.find(e => e.hasAttribute('data-back')), primary = els.slice().reverse().find(e => e.classList.contains('red') && e !== back);
+  const rest = els.filter(e => e !== back && e !== primary), phone = innerWidth < 620;
+  const keep = phone ? (rest.length <= 1 && !primary ? rest.length : rest.length === 1 ? 1 : 0) : rest.length <= 3 ? rest.length : 2;
+  const shown = rest.slice(0, keep), more = rest.slice(keep);
+  return `<div class="pagehead">${back ? `<a class="backlink noprint" href="${back.getAttribute('href')}" data-back="${back.dataset.back}">${ICON.back.replace('<svg', '<svg width="16" height="16"')} Back</a>` : ''}
+    <div class="ph-main"><div class="ph-text"><div class="eyebrow">${eyebrow}</div><h1 class="ph-h1">${title}</h1>${sub ? `<div class="muted ph-sub">${sub}</div>` : ''}</div>
+    ${shown.length + more.length || primary ? `<div class="ph-acts noprint">${shown.map(e => e.outerHTML).join('')}${more.length ? moreMenu(more, shown.length ? 'More' : phone && primary ? 'More' : 'Actions') : ''}${primary ? primary.outerHTML : ''}</div>` : ''}</div></div>`;
+};
 const avatar = p => `<span class="avatar" style="background:${avatarColour(p.name)}">${initials(p.name)}</span>`;
 
 /* ---------- overview ---------- */
@@ -106,6 +121,8 @@ function auditText(a) {
     case 'schedule_cancelled': return `Admin cancelled a scheduled send <span class="muted">· ${esc(d.label || '')} (${d.count})</span>`;
     case 'training_released': return `Training invites ${d.source === 'scheduled' ? 'sent on schedule' : 'released by admin'} for <b>${esc(d.name)}</b> <span class="muted">· ${d.invites} invite${d.invites === 1 ? '' : 's'} to a team of ${d.team}</span>`;
     case 'events_batch_added': return `Admin added <b>${d.count}</b> events <span class="muted">· ${esc((d.names || []).join(', '))}</span>`;
+    case 'list_synced': return `Admin synced <b>${esc(d.list)}</b> from ${esc(d.file || 'a list')} <span class="muted">· ${[d.added && d.added + ' added', d.joined && d.joined + ' joined', d.updated && d.updated + ' updated', d.reactivated && d.reactivated + ' reactivated', d.archived && d.archived + ' archived', d.removed && d.removed + ' taken off the team', d.unchanged + ' unchanged'].filter(Boolean).join(', ')}</span>`;
+    case 'list_sync_undone': return `Admin undid a list sync`;
     case 'volunteer_archived': return `Admin archived <b>${esc(d.name || who)}</b>${d.reason ? ` <span class="muted">· ${esc(d.reason)}</span>` : ''}`;
     case 'volunteer_reactivated': return `<b>${esc(d.name || who)}</b> reactivated <span class="muted">· ${esc(d.source || 'admin')} · ${d.records_kept} record${d.records_kept === 1 ? '' : 's'} kept${d.records_removed ? `, ${d.records_removed} over ${retentionYears()} years old removed` : ''}</span>`;
     case 'volunteer_deleted': return `${a.actor === 'system' ? 'Automatic cleanup' : 'Admin'} permanently deleted a volunteer <span class="muted">· ref ${esc(d.ref)} · ${d.records_deleted} records and ${d.audit_entries_deleted} audit entries erased · ${esc(d.reason || '')}</span>`;
@@ -171,7 +188,7 @@ function bindExports() {
 const live = () => db.people.filter(p => !p.archived);
 const TYPES = [['volunteer', 'Volunteers'], ['staff', 'Staff'], ['other', 'Other']];
 const typeOf = p => p.type || (p.roles.includes('Staff') ? 'staff' : 'volunteer');
-let peopleTab = 'all'; const peopleSel = new Set();
+let peopleTab = 'all', peopleFiltersOpen = false; const peopleSel = new Set();
 function filteredPeople() {
   const f = peopleFilter; const ev = f.event && EventById(f.event);
   return db.people.filter(p => {
@@ -198,17 +215,19 @@ function renderPeople() {
   const f = peopleFilter; const ev = f.event && EventById(f.event);
   const count = t => t === 'all' ? live().length : t === 'archived' ? db.people.filter(p => p.archived).length : live().filter(p => typeOf(p) === t).length;
   adminShell('people', pageHead('People', 'People', 'Training is assigned automatically from each person’s roles and the events they’ve signed up for.',
-    `<button class="btn ghost sm" id="prem">✉️ Send reminders</button><button class="btn ghost sm" id="pmail">Email these people</button><button class="btn ghost sm" id="pprint">${ICON.print} Print list</button><button class="btn ghost sm" id="imp">Import CSV</button><button class="btn red sm" id="addp">+ Add person</button>`) + `
+    `<button class="btn ghost sm" id="prem">${ICON.mail} Send reminders…</button><button class="btn ghost sm" id="psync">Sync a full list…</button><button class="btn ghost sm" id="pmail">Email everyone in this view…</button><button class="btn ghost sm" id="imp">Import from CSV…</button><button class="btn ghost sm" id="pprint">${ICON.print} Print list</button><button class="btn red sm" id="addp">+ Add person</button>`) + `
     <div class="tabs" role="tablist">${[['all', 'Everyone'], ...TYPES, ['archived', 'Archived']].map(([k, l]) => `<button role="tab" class="${peopleTab === k ? 'on' : ''}" aria-selected="${peopleTab === k}" data-ptab="${k}">${l} <span>${count(k)}</span></button>`).join('')}</div>
-    <div class="filters">
-      <input class="input" placeholder="Search name, email or church…" id="pq" value="${esc(f.q)}" style="flex:1 1 240px">
+    <div class="filters ${peopleFiltersOpen ? 'open' : ''}">
+      <input class="input" type="search" placeholder="Search name, email or church…" id="pq" value="${esc(f.q)}" style="flex:1 1 240px">
+      ${(() => { const n = ['event', 'role', 'pathway', 'status', 'ready'].filter(k => f[k]).length; return `<button class="btn ghost filt-tog" id="pfilt" aria-expanded="${peopleFiltersOpen}" aria-controls="pfbox">Filters${n ? ` <span class="ibbadge">${n}</span>` : ''}</button>`; })()}
+      <div class="filt-box" id="pfbox">
       <select class="input" id="pev"><option value="">All events</option>${db.events.map(e => `<option value="${e.id}" ${f.event === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</select>
       <select class="input" id="prole"><option value="">All roles</option>${db.roles.map(r => `<option ${f.role === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
       <select class="input" id="ppw"><option value="">All pathways</option>${db.pathways.map(pw => `<option value="${pw.id}" ${f.pathway === pw.id ? 'selected' : ''}>${esc(pw.title)}</option>`).join('')}</select>
       <select class="input" id="pst"><option value="">Any status</option>${[['attention', 'Needs attention'], ['complete', 'Up to date'], ['due', 'Due soon'], ['progress', 'In progress'], ['none', 'Not started'], ['expired', 'Expired'], ['locked', 'Needs review']].map(([k, l]) => `<option value="${k}" ${f.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       ${ev ? `<select class="input" id="prd"><option value="">Any readiness</option>${SEG.map(([k, l]) => `<option value="${k}" ${f.ready === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
       ${Object.keys(PF0).some(k => f[k]) ? `<button class="btn ghost sm" id="pclear">Clear</button>` : ''}
-    </div>
+    </div></div>
     ${ev ? `<div class="card" style="margin-bottom:14px;padding:16px 18px"><div class="row between" style="margin-bottom:8px"><b>${esc(ev.name)}</b><span class="small muted">${fmtDate(ev.date)}</span></div>${readyBar(readyCounts(ev), ev.id)}${readyLegend(readyCounts(ev), ev.id)}</div>` : ''}
     ${peopleTab === 'archived' ? `<div class="notice info small" style="margin-bottom:14px">${ICON.info}<div>Archived volunteers can’t sign in and never get reminders. Their records are kept for ${retentionYears()} years, then deleted automatically. Reactivating keeps anything from the last ${retentionYears()} years.</div></div>` : ''}
     <div id="plist"></div>`);
@@ -260,7 +279,9 @@ function renderPeople() {
   $('#prd') && ($('#prd').onchange = e => set('ready', e.target.value));
   $('#pclear') && ($('#pclear').onclick = () => { peopleFilter = { ...PF0 }; renderPeople(); });
   $('#addp').onclick = () => personPanel();
+  $('#pfilt').onclick = e => { peopleFiltersOpen = !peopleFiltersOpen; e.currentTarget.closest('.filters').classList.toggle('open', peopleFiltersOpen); e.currentTarget.setAttribute('aria-expanded', peopleFiltersOpen); };
   $('#imp').onclick = importPeople;
+  $('#psync').onclick = () => rosterSync(peopleFilter.event ? 'event:' + peopleFilter.event : peopleTab === 'staff' ? 'staff' : peopleTab === 'all' ? 'volunteers' : peopleTab === 'other' ? 'all' : 'volunteers');
   $('#prem').onclick = () => { const ppl = filteredPeople().filter(p => !p.archived); remindPeople(ppl, { title: ppl.length === live().length ? 'Remind everyone who needs it' : `Remind the ${ppl.length} people in this view`, event: peopleFilter.event && EventById(peopleFilter.event) }); };
   $('#pprint').onclick = () => printPeopleList(filteredPeople());
   $('#pmail').onclick = () => { const ppl = filteredPeople().filter(p => !p.archived); const ev = peopleFilter.event && EventById(peopleFilter.event); composeEmail(ppl, { title: 'Email this list', ctxFor: ev ? () => ({ event: ev }) : () => ({}), note: `Sending to the ${ppl.length} people in your current People view.` }); };
@@ -424,7 +445,7 @@ function printRoster(ev) {
   const ppl = live().filter(p => p.eventIds.includes(ev.id)).sort((a, b) => a.name.localeCompare(b.name)); const c = readyCounts(ev);
   const L = { ready: 'Ready', renew: 'Needs refresher', todo: 'Not trained' };
   printDoc(esc(ev.name), `Team safeguarding roster · ${fmtDate(ev.date)}${ev.endDate && ev.endDate !== ev.date ? ' – ' + fmtDate(ev.endDate) : ''} · ${esc(ev.location || '')}`, `
-    <div class="pd-grid pd-3"><div><b>Ready</b><span class="pd-big" style="color:#239084">${c.ready}</span></div><div><b>Needs refresher</b><span class="pd-big" style="color:#C2850E">${c.renew}</span></div><div><b>Not trained</b><span class="pd-big" style="color:#D63744">${c.todo}</span></div></div>
+    <div class="pd-grid pd-3"><div><b>Ready</b><span class="pd-big" style="color:#1B766C">${c.ready}</span></div><div><b>Needs refresher</b><span class="pd-big" style="color:#C2850E">${c.renew}</span></div><div><b>Not trained</b><span class="pd-big" style="color:#D63744">${c.todo}</span></div></div>
     <p class="small">Required training: ${ev.requiredPathways.map(id => esc(P(id)?.title || '')).join(', ')}. “Ready” means every certificate is valid until the end of the event.</p>
     <table class="pd-table"><thead><tr><th>Name</th><th>Role</th><th>Readiness</th>${ev.requiredPathways.map(id => `<th>${esc(P(id)?.title || '')} — valid until</th>`).join('')}<th>✓ on site</th></tr></thead><tbody>
     ${ppl.map(p => { const s = eventState(p, ev); return `<tr><td><b>${esc(p.name)}</b></td><td class="small">${esc(p.roles.join(', '))}</td><td><span class="pd-chip pd-${s === 'ready' ? 'complete' : s === 'renew' ? 'due' : 'expired'}">${L[s]}</span></td>${ev.requiredPathways.map(id => { const lc = latestCompletion(p.id, id); return `<td>${lc ? fmtDate(lc.expiresAt) : '—'}</td>`; }).join('')}<td class="pd-box"></td></tr>`; }).join('')}
@@ -550,7 +571,7 @@ function renderFollowUp(pid, pwid) {
           ${bq?.explanation ? `<div class="fu-exp"><b>Key point:</b> ${esc(bq.explanation)}</div>` : ''}</div>`; }).join('') || '<div class="card empty">No question detail recorded.</div>'}
         <h3 style="margin:26px 0 10px">All attempts</h3>
         ${atts.map((x, i) => `<details class="fu-att"><summary><span class="an">Attempt ${i + 1}</span><span class="ad">${fmtDT(x.a.at)}</span><span class="abar"><i style="width:${x.a.score}%;background:var(--red)"></i><em style="left:${step.passMark}%"></em></span><b style="color:var(--red-600)">${x.a.score}%</b><span class="tiny muted" style="margin-left:auto">${x.a.questions.filter(q => !q.correct).length} of ${x.a.questions.length} wrong</span></summary>
-          <table><tbody>${x.a.questions.map((q, k) => `<tr><td class="tiny muted">Q${k + 1}</td><td>${q.correct ? '<span style="color:var(--teal);font-weight:800">✓</span>' : '<span style="color:var(--red);font-weight:800">✗</span>'}</td><td><b>${esc(q.text)}</b><div class="small" style="margin-top:3px">${q.correct ? `<span style="color:var(--teal)">${esc(q.chosen)}</span>` : `<span style="color:var(--red-600)">${esc(q.chosen)}</span> <span class="muted">→ correct: ${esc(q.answer || '')}</span>`}</div></td></tr>`).join('')}</tbody></table></details>`).join('')}
+          <table><tbody>${x.a.questions.map((q, k) => `<tr><td class="tiny muted">Q${k + 1}</td><td>${q.correct ? '<span style="color:var(--teal);font-weight:800">✓</span>' : '<span style="color:var(--red-600);font-weight:800">✗</span>'}</td><td><b>${esc(q.text)}</b><div class="small" style="margin-top:3px">${q.correct ? `<span style="color:var(--teal)">${esc(q.chosen)}</span>` : `<span style="color:var(--red-600)">${esc(q.chosen)}</span> <span class="muted">→ correct: ${esc(q.answer || '')}</span>`}</div></td></tr>`).join('')}</tbody></table></details>`).join('')}
       </div>
       <aside class="fu-side">
         <div class="card">
@@ -636,8 +657,8 @@ function renderPersonRecord(id) {
         return `<div class="card tcard"><div class="row between"><h3>${esc(pw.title)}</h3>${chip(st)}</div>
           ${st.c ? (() => { const c = st.c, exp = new Date(c.expiresAt), start = new Date(c.completedAt), never = c.expiresAt.startsWith('9999');
             const left = never ? 1 : Math.max(0, Math.min(1, (exp - Date.now()) / (exp - start))); const months = Math.round((exp - Date.now()) / (30.44 * DAY));
-            const col = st.key === 'expired' || left <= 0 ? 'var(--red)' : st.key === 'due' ? 'var(--amber)' : 'var(--teal)';
-            return `<div class="tfacts"><div><span>Completed</span><b>${fmtDate(c.completedAt)}</b></div><div><span>${exp > new Date() ? 'Valid until' : 'Expired'}</span><b style="color:${col}">${fmtDate(c.expiresAt)}</b></div><div><span>${c.manual ? 'Recorded' : 'Score'}</span><b>${c.manual ? 'By admin' : c.score != null ? c.score + '%' : '—'}</b></div><div><span>Version</span><b>v${c.version}${c.version < pw.version ? ` <em class="tiny" style="color:#A86A0C;font-style:normal">(now v${pw.version})</em>` : ''}</b></div></div>
+            const col = st.key === 'expired' || left <= 0 ? 'var(--red-600)' : st.key === 'due' ? '#8A5508' : 'var(--teal)';
+            return `<div class="tfacts"><div><span>Completed</span><b>${fmtDate(c.completedAt)}</b></div><div><span>${exp > new Date() ? 'Valid until' : 'Expired'}</span><b style="color:${col}">${fmtDate(c.expiresAt)}</b></div><div><span>${c.manual ? 'Recorded' : 'Score'}</span><b>${c.manual ? 'By admin' : c.score != null ? c.score + '%' : '—'}</b></div><div><span>Version</span><b>v${c.version}${c.version < pw.version ? ` <em class="tiny" style="color:#8A5508;font-style:normal">(now v${pw.version})</em>` : ''}</b></div></div>
               ${never ? '' : `<div class="tlife"><i style="width:${left * 100}%;background:${col}"></i></div><div class="tiny muted" style="margin-top:4px">${exp > new Date() ? (months >= 1 ? `${months} month${months === 1 ? '' : 's'} left` : `${Math.max(0, Math.ceil((exp - Date.now()) / DAY))} days left`) : `Expired ${Math.round((Date.now() - exp) / (30.44 * DAY))} months ago`}</div>`}`; })() : `<div class="small muted" style="margin:6px 0 4px">Not completed yet · current version v${pw.version}</div>`}
           ${(() => { const renewing = pw.steps.some(s => stepDone(pr, s) || (pr.steps[s.id]?.attempts || []).length); const cyc = st.c && !renewing;
             const tick = `<span class="tk on">${ICON.check.replace('<svg', '<svg width="13" height="13"')}</span>`;
@@ -679,7 +700,7 @@ function renderPersonRecord(id) {
   };
   adminShell('people', `<div class="printable">` + pageHead(`<a href="#/admin/people">People</a> / Record`, `<span class="person" style="gap:14px">${avatar(p).replace('avatar"', 'avatar" style="width:48px;height:48px;font-size:17px;background:' + avatarColour(p.name) + '"')}${esc(p.name)}</span>`,
     `${esc(p.email)}${p.phone ? ` · ${esc(p.phone)}` : ''}${p.org ? ` · ${esc(p.org)}` : ''} · Added ${fmtDate(p.createdAt)}${p.archived ? ' · <b style="color:var(--red-600)">Archived</b>' : ''}<br><span class="typepill t-${typeOf(p)}">${typeOf(p)}</span>${p.accessNI?.status === 'cleared' ? '<span class="tag" style="background:var(--teal-50);color:var(--teal)">AccessNI cleared</span>' : p.accessNI?.status === 'applied' ? '<span class="tag" style="background:var(--amber-50)">AccessNI pending</span>' : ''}${p.roles.map(r => `<span class="tag">${esc(r)}</span>`).join('')}${p.eventIds.map(id => `<span class="tag" style="background:var(--sky-50)">${esc(EventById(id)?.name || '')}</span>`).join('')}`,
-    `<a class="btn ghost sm" href="#/admin/people" data-back="#/admin/people">${ICON.back} Back</a><button class="btn ghost sm" data-copy="${p.token}">${ICON.link} Invite link</button><a class="btn ghost sm" href="#/preview/${p.id}">Preview as volunteer</a><button class="btn ghost sm" id="prp">${ICON.print} Print record</button><button class="btn ghost sm" id="psend">✉️ Send reminder</button><a class="btn ghost sm" href="#/inbox/${p.token}">📬 Inbox</a><button class="btn red sm" id="pe">Edit</button>`) + `
+    `<a class="btn ghost sm" href="#/admin/people" data-back="#/admin/people">${ICON.back} Back</a><button class="btn ghost sm" id="psend">${ICON.mail} Email…</button><a class="btn ghost sm" href="#/preview/${p.id}">Preview as volunteer</a><button class="btn ghost sm" data-copy="${p.token}">${ICON.link} Copy sign-in link</button><button class="btn ghost sm" id="prp">${ICON.print} Print record</button><a class="btn ghost sm" href="#/inbox/${p.token}">${ICON.mail} Demo inbox</a><button class="btn red sm" id="pe">Edit person</button>`) + `
     <div class="tabs noprint" role="tablist">${tabs.map(([k, l, n]) => `<button role="tab" aria-selected="${recordTab === k}" class="${recordTab === k ? 'on' : ''}" data-tab="${k}">${l} <span>${n}</span>${k === 'training' && lockedPws.length ? '<i class="tabdot"></i>' : ''}</button>`).join('')}</div>
     <div id="tabbody" class="fadein">${body[recordTab]()}</div></div>`);
   bindCopy();
@@ -729,7 +750,7 @@ function renderEventDetail(id) {
             <div class="tiny muted" style="margin-top:6px">${ST.filter(([k]) => cc[k]).map(([k, l]) => `${l} ${cc[k]}`).join(' · ')}</div></div>`; }).join('') || '<div class="empty">No training required — edit the event to add some.</div>'}</div>
     </div>
     <div class="row between" style="margin:26px 0 12px"><h2>Team <span class="muted" style="font-weight:600;font-size:18px">(${team.length})</span></h2>
-      <div class="row"><input class="input" id="evq" placeholder="Search team…" value="${esc(evFilter.q)}" style="width:220px;padding:9px 14px"><button class="btn ghost sm" id="evmail">Copy emails</button><button class="btn ghost sm" id="evemail">Email team…</button><button class="btn soft sm" id="evremind">✉️ Remind not ready (${team.filter(p => eventState(p, ev) !== 'ready').length})</button></div></div>
+      <div class="row"><input class="input" id="evq" placeholder="Search team…" value="${esc(evFilter.q)}" style="width:220px;padding:9px 14px"><button class="btn ghost sm" id="evmail">Copy emails</button><button class="btn ghost sm" id="evemail">Email team…</button><button class="btn ghost sm" id="evsync">Sync team from a list…</button><button class="btn soft sm" id="evremind">Remind not ready (${team.filter(p => eventState(p, ev) !== 'ready').length})</button></div></div>
     <div class="tabs" style="margin-bottom:14px">${[['', 'Everyone', team.length], ['ready', 'Ready', c.ready], ['renew', 'Needs refresher', c.renew], ['todo', 'Not trained', c.todo]].map(([k, l, n]) => `<button class="${evFilter.ready === k ? 'on' : ''}" data-rf="${k}">${l} <span>${n}</span></button>`).join('')}</div>
     <div id="evlist"></div>`);
   const draw = () => {
@@ -739,7 +760,7 @@ function renderEventDetail(id) {
         return `<tr data-row="${p.id}" tabindex="0"><td><span class="person">${avatar(p)}<span><b>${esc(p.name)}</b><br><span class="tiny muted">${esc(p.email)}</span></span></span></td><td class="hide-md">${p.roles.map(r => `<span class="tag">${esc(r)}</span>`).join('')}</td>
           <td><span class="chip st-${K[s]}"><span class="dot"></span>${L[s]}</span></td>
           ${pws.map(pw => { const lc = latestCompletion(p.id, pw.id), st = statusOf(p, pw); const ok = lc && new Date(lc.expiresAt) > new Date(ev.endDate || ev.date);
-            return `<td class="hide-sm">${lc && new Date(lc.expiresAt) > new Date() ? `<span class="small" style="font-weight:700;color:${ok ? 'var(--teal)' : '#A86A0C'}">${ok ? '✓' : '!'} until ${fmtDate(lc.expiresAt)}</span>` : chip(st)}</td>`; }).join('')}
+            return `<td class="hide-sm">${lc && new Date(lc.expiresAt) > new Date() ? `<span class="small" style="font-weight:700;color:${ok ? 'var(--teal)' : '#8A5508'}">${ok ? '✓' : '!'} until ${fmtDate(lc.expiresAt)}</span>` : chip(st)}</td>`; }).join('')}
           <td class="rowacts"><button class="btn ghost xs" data-copy="${p.token}" title="Copy invite link">${ICON.link}</button><button class="btn ghost xs" data-rm="${p.id}" title="Remove from this event">${ICON.x.replace('width="18" height="18"', 'width="14" height="14"')}</button><span class="chev">${ICON.arrow.replace('width="18" height="18"', 'width="16" height="16"')}</span></td></tr>`; }).join('') || `<tr><td colspan="${4 + pws.length}" class="empty">${team.length ? 'No one matches' : 'No one is signed up yet — use “Add people”.'}</td></tr>`}
       </tbody></table></div>`;
     bindCopy();
@@ -758,6 +779,7 @@ function renderEventDetail(id) {
   $('#evremind').onclick = () => remindPeople(team.filter(p => eventState(p, ev) !== 'ready'), { title: `Remind ${ev.name} team`, event: ev });
   $('#evrelease') && ($('#evrelease').onclick = e => { if (!confirmInline(e.currentTarget, 'Click again to email the team now')) return; const n = releaseEvent(ev, 'manual'); toast(`Training released · ${n} invite${n === 1 ? '' : 's'} sent`); renderEventDetail(id); });
   $('#evrelchg') && ($('#evrelchg').onclick = () => eventForm(ev));
+  $('#evsync').onclick = () => rosterSync('event:' + ev.id);
   $('#evemail') && ($('#evemail').onclick = () => composeEmail(team, { title: `Email ${ev.name} team`, event: ev, ctxFor: () => ({ event: ev }) }));
 }
 function addToEvent(ev) {
@@ -784,7 +806,7 @@ function renderEvents() {
       const order = { todo: 0, renew: 1, ready: 2 }; const faces = [...ppl].sort((a, b) => order[eventState(a, ev)] - order[eventState(b, ev)]).slice(0, 12);
       const dotCol = { ready: 'var(--teal)', renew: 'var(--amber)', todo: 'var(--red)' }, dotTxt = { ready: 'ready', renew: 'needs a refresher before this event', todo: 'training not complete' };
       return `<div class="card evcard" data-evopen="${ev.id}" tabindex="0"><div class="row between"><div><div class="eyebrow">${fmtDate(ev.date)}${ev.endDate && ev.endDate !== ev.date ? ' – ' + fmtDate(ev.endDate) : ''}</div><h3 style="margin-top:4px">${esc(ev.name)}</h3><div class="small muted">${esc(ev.location || '')}</div></div><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn ghost xs" data-roster="${ev.id}" title="Print team roster">${ICON.print}</button><button class="btn ghost xs" data-ev="${ev.id}">Edit</button></div></div>
-        <div class="tiny" style="margin-top:8px;color:${isReleased(ev) ? 'var(--teal)' : '#A86A0C'};font-weight:700">✉︎ ${esc(releaseLabel(ev, true))}</div>
+        <div class="tiny" style="margin-top:8px;color:${isReleased(ev) ? 'var(--teal)' : '#8A5508'};font-weight:700">✉︎ ${esc(releaseLabel(ev, true))}</div>
         <div style="margin:10px 0 8px" class="small"><b>Requires:</b> ${ev.requiredPathways.map(id => `<span class="tag">${esc(P(id)?.title || '?')}</span>`).join('') || '<span class="muted">Nothing yet</span>'}</div>
         <div class="row between small"><span><b>${c.ready}</b> of ${plural(c.total, 'volunteer')} ready</span><span><b>${Math.round(pct)}%</b></span></div>
         <div style="margin:8px 0 0">${readyBar(c, ev.id)}</div>
@@ -807,7 +829,7 @@ function eventForm(ev) {
     <div class="grid g3"><div class="field"><label class="f">Starts</label><input class="input" type="date" id="ed" value="${ev.date}"></div><div class="field"><label class="f">Ends</label><input class="input" type="date" id="ee" value="${ev.endDate || ''}"></div><div class="field"><label class="f">Location</label><input class="input" id="el" value="${esc(ev.location || '')}"></div></div>
     <div class="field"><label class="f">Required training</label><div class="checks">${db.pathways.map(p => `<label><input type="checkbox" name="erp" value="${p.id}" ${ev.requiredPathways.includes(p.id) ? 'checked' : ''}>${esc(p.title)}</label>`).join('')}</div></div>
     ${releaseFields(isNew ? { mode: 'before', weeks: 6 } : releaseOf(ev), ev.releasedAt && releaseOf(ev).mode !== 'now' ? ev.releasedAt : null)}</div>
-    <footer>${isNew ? '' : `<button class="btn ghost" id="edel" style="margin-right:auto;color:var(--red)">${ICON.trash} Delete</button>`}<button class="btn ghost" data-close>Cancel</button><button class="btn red" id="esave">Save</button></footer>`);
+    <footer>${isNew ? '' : `<button class="btn ghost" id="edel" style="margin-right:auto;color:var(--red-600)">${ICON.trash} Delete</button>`}<button class="btn ghost" data-close>Cancel</button><button class="btn red" id="esave">Save</button></footer>`);
   bindReleaseFields(s);
   $('#esave', s).onclick = () => {
     const rel = readRelease(s); if (rel.mode === 'date' && !rel.date) { toast('Choose the date invites should go out'); return; }
@@ -829,7 +851,7 @@ function renderPathways() {
       const assigned = live().filter(p => requiredPathwaysFor(p).includes(pw));
       const done = assigned.filter(p => ['complete', 'due'].includes(statusOf(p, pw).key)).length;
       return `<a class="card pcard" href="#/admin/pathways/${pw.id}" style="color:inherit;text-decoration:none;display:block">
-        <div class="row between"><span class="tag" style="background:${pw.colour}1a;color:${pw.colour}">v${pw.version}</span>${pw.active === false ? '<span class="chip st-none">Hidden</span>' : ''}</div>
+        <div class="row between"><span class="tag" style="background:${pw.colour}1a;color:color-mix(in srgb,${pw.colour} 70%,#000)">v${pw.version}</span>${pw.active === false ? '<span class="chip st-none">Hidden</span>' : ''}</div>
         <h3 style="margin:10px 0 6px">${esc(pw.title)}</h3><p class="small muted">${esc(pw.summary)}</p>
         <div class="row" style="gap:6px;margin:10px 0">${pw.steps.map(s => `<span class="ico ${s.type}" title="${esc(s.title)}" style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center">${ICON[s.type].replace('<svg', '<svg width="15" height="15"')}</span>`).join('')}<span class="ico attest" style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center">${ICON.attest.replace('<svg', '<svg width="15" height="15"')}</span></div>
         <div class="tiny muted">${renewLabel(pw).replace(/^./, c => c.toUpperCase())} · Required for ${esc(pw.requiredForRoles.join(', ') || 'events only')} · ${done}/${assigned.length} complete</div></a>`;
@@ -848,7 +870,7 @@ function renderPathwayEditor(id) {
   const changed = () => JSON.stringify(stripRev(draft)) !== JSON.stringify(stripRev(live));
   const typeName = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz' };
   const stepSummary = s => s.type === 'video' ? (s.video?.source === 'file' ? `Uploaded file · ${esc(s.video.fileName || '')}` : `${s.video?.source === 'youtube' ? 'YouTube' : 'Vimeo'} · ${esc(s.video?.url || '')}`)
-    : s.type === 'quiz' ? `${s.questions.length} questions in bank · ${s.drawCount} drawn · pass ${s.passMark}% · ${s.lock === false ? 'unlimited attempts' : `locks after ${s.maxAttempts} fails`}${s.questions.length < s.drawCount * 2 ? ' · <span style="color:#A86A0C">tip: add more questions so retakes feel fresh</span>' : ''}`
+    : s.type === 'quiz' ? `${s.questions.length} questions in bank · ${s.drawCount} drawn · pass ${s.passMark}% · ${s.lock === false ? 'unlimited attempts' : `locks after ${s.maxAttempts} fails`}${s.questions.length < s.drawCount * 2 ? ' · <span style="color:#8A5508">tip: add more questions so retakes feel fresh</span>' : ''}`
       : `${(s.body || '').split(/\s+/).length} words${s.link?.url ? ' · links to a document' : ''}`;
   adminShell('pathways', pageHead(`<a href="#/admin/pathways">Pathways</a> / Edit`, esc(draft.title), `Live version: <b>v${live.version}</b>${live.version ? ` · published ${fmtDate(live.updatedAt)}` : ' · not published yet'}`,
     `<a class="btn ghost sm" href="#/admin/pathways" id="cancel">Close</a><button class="btn red sm" id="pub" ${changed() ? '' : 'disabled'}>Publish v${live.version + 1}</button>`) + `
@@ -877,7 +899,7 @@ function renderPathwayEditor(id) {
         <div class="field"><label class="f">Colour</label><input class="input" type="color" data-k="colour" value="${draft.colour}" style="height:44px;padding:4px"></div></div>
         <div class="field"><label class="f">Required for roles</label><div class="checks">${db.roles.map(r => `<label><input type="checkbox" name="rr" value="${esc(r)}" ${draft.requiredForRoles.includes(r) ? 'checked' : ''}>${esc(r)}</label>`).join('')}</div><div class="help">Also add it to events under <a href="#/admin/events">Events</a>.</div></div>
         <div class="field"><label class="f">Attestation statement</label><textarea class="input" data-k="attestation">${esc(draft.attestation)}</textarea></div>
-        <label class="row small" style="gap:8px"><input type="checkbox" id="act" ${draft.active !== false ? 'checked' : ''} style="accent-color:var(--red)"> Active (assign to volunteers)</label>
+        <label class="row small" style="gap:8px"><input type="checkbox" id="act" ${draft.active !== false ? 'checked' : ''} style="accent-color:var(--red-600)"> Active (assign to volunteers)</label>
       </div>
     </div>
     <h3 style="margin:28px 0 10px">Version history</h3>
@@ -934,7 +956,7 @@ function stepEditor(step, done, isNew) {
   const work = JSON.parse(JSON.stringify(step));
   const openQs = new Set();
   const s = modal(`<header><h2>${{ video: 'Video step', read: 'Reading step', quiz: 'Quiz step' }[work.type]}</h2><button class="iconbtn" data-close>${ICON.x}</button></header><div class="body" id="seb"></div>
-    <footer><button class="btn ghost" id="sdel" style="margin-right:auto;color:var(--red)">${ICON.trash} Remove step</button><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="ssave">Done</button></footer>`, work.type === 'quiz' ? 'wide' : '');
+    <footer><button class="btn ghost" id="sdel" style="margin-right:auto;color:var(--red-600)">${ICON.trash} Remove step</button><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="ssave">Done</button></footer>`, work.type === 'quiz' ? 'wide' : '');
   const body = $('#seb', s);
   const common = `<div class="field"><label class="f">Step title</label><input class="input" id="st" value="${esc(work.title)}"></div>`;
   const drawVideo = () => {
@@ -971,7 +993,7 @@ function stepEditor(step, done, isNew) {
   const drawQuiz = () => {
     body.innerHTML = common + `<div class="grid g3"><div class="field"><label class="f">Questions per attempt</label><input class="input" type="number" min="1" max="20" id="qd" value="${work.drawCount}"></div>
       <div class="field"><label class="f">Pass mark (%)</label><input class="input" type="number" min="1" max="100" id="qp" value="${work.passMark}"></div>
-      <div class="field"><label class="f">Question bank</label><div class="help" style="margin-top:12px">${work.questions.length} questions · each attempt draws ${work.drawCount}${work.questions.length < work.drawCount * 2 ? ' — <b style="color:#A86A0C">add more so retakes feel fresh</b>' : ''}</div></div></div>
+      <div class="field"><label class="f">Question bank</label><div class="help" style="margin-top:12px">${work.questions.length} questions · each attempt draws ${work.drawCount}${work.questions.length < work.drawCount * 2 ? ' — <b style="color:#8A5508">add more so retakes feel fresh</b>' : ''}</div></div></div>
       <div class="lockset"><label class="switch"><input type="checkbox" id="qlock" ${work.lock !== false ? 'checked' : ''}><span></span></label>
         <div style="flex:1"><b>Lock the quiz after repeated failed attempts</b><div class="small muted">When locked, the volunteer is told someone will be in touch, and admins are asked to follow up before reopening it.</div>
         <div class="row" id="qlockn" style="margin-top:10px;gap:8px;${work.lock !== false ? '' : 'display:none'}"><span class="small">Lock after</span><input class="input" type="number" min="1" max="10" id="qa" value="${work.maxAttempts}" style="width:80px"><span class="small">failed attempts</span></div>
@@ -1075,8 +1097,8 @@ function renderSettings() {
         <div class="card"><h3 style="margin-bottom:8px">Data</h3><p class="small muted">Download everything, or restore from a backup.</p>
           <div class="row"><button class="btn ghost sm" data-x="backup">${ICON.dl} Download backup</button><button class="btn ghost sm" id="restore">Restore backup…</button></div></div>
         <div class="card"><h3 style="margin-bottom:8px">Demo</h3>
-          <label class="row small" style="gap:8px;margin-bottom:12px"><input type="checkbox" id="democtl" ${st.demoControls !== false ? 'checked' : ''} style="accent-color:var(--red);width:18px;height:18px"> Show demo controls (skip video, auto-answer quizzes)</label>
-          <p class="small muted">Put the sample volunteers, events and pathways back to how they started.</p><button class="btn ghost sm" id="reset" style="color:var(--red)">Reset demo data</button></div>
+          <label class="row small" style="gap:8px;margin-bottom:12px"><input type="checkbox" id="democtl" ${st.demoControls !== false ? 'checked' : ''} style="accent-color:var(--red-600);width:18px;height:18px"> Show demo controls (skip video, auto-answer quizzes)</label>
+          <p class="small muted">Put the sample volunteers, events and pathways back to how they started.</p><button class="btn ghost sm" id="reset" style="color:var(--red-600)">Reset demo data</button></div>
       </div>
     </div>`);
   $('#ss').onclick = () => {
@@ -1270,7 +1292,7 @@ function renderEmails() {
       ${rel.map(e => { const n = live().filter(p => p.eventIds.includes(e.id) && assignedCtx(p, e)).length; return `<div class="uprow"><div class="upwhen"><b>${releaseDate(e) ? fmtDate(releaseDate(e)) : 'On hold'}</b><span class="tiny muted">${releaseDate(e) ? '09:00' : 'manual'}</span></div><div style="flex:1;min-width:0"><b>Training invites · ${esc(e.name)}</b><div class="tiny muted">${n} ${n === 1 ? 'person' : 'people'} on the team so far · ${esc(releaseLabel(e))}</div></div><div class="row" style="gap:6px"><a class="btn ghost xs" href="#/admin/events/${e.id}">Open event</a></div></div>`; }).join('')}</div>` : ''; })()}
     <h2 style="margin-bottom:12px">Automatic reminders</h2>
     <div class="grid g2" style="margin-bottom:28px">${db.emailRules.map(r => `<div class="card rulecard ${r.enabled ? '' : 'off'}">
-      <div class="row between" style="align-items:flex-start;flex-wrap:nowrap;gap:14px"><div><div class="row" style="gap:8px"><span class="tag" style="background:${r.kind === 'time' ? 'var(--sky-50)' : 'var(--plum-50)'};color:${r.kind === 'time' ? '#2F7C84' : 'var(--plum)'}">${r.kind === 'time' ? 'Time-based' : 'When it happens'}</span></div>
+      <div class="row between" style="align-items:flex-start;flex-wrap:nowrap;gap:14px"><div><div class="row" style="gap:8px"><span class="tag" style="background:${r.kind === 'time' ? 'var(--sky-50)' : 'var(--plum-50)'};color:${r.kind === 'time' ? '#24666D' : 'var(--plum)'}">${r.kind === 'time' ? 'Time-based' : 'When it happens'}</span></div>
         <h3 style="margin:8px 0 4px">${esc(r.name)}</h3><div class="small muted">${esc(r.when)}${r.days ? `: <b style="color:var(--ink)">${r.days.map(d => d + (r.trigger === 'notstarted' ? ' days after' : ' days before')).join(', ')}</b>` : ''}</div></div>
         <label class="switch"><input type="checkbox" data-rtog="${r.id}" ${r.enabled ? 'checked' : ''}><span></span></label></div>
       <div class="small" style="margin-top:12px;padding:10px 12px;background:#FBFAF8;border-radius:10px"><span class="muted">Subject:</span> ${esc(r.subject)}</div>
@@ -1371,7 +1393,7 @@ function confirmReactivate(p, after) {
 }
 function confirmDelete(p, after) {
   const recs = db.completions.filter(c => c.personId === p.id).length, logs = db.audit.filter(a => a.personId === p.id).length;
-  const s = modal(`<header><div><div class="eyebrow" style="color:var(--red)">Permanent deletion</div><h2 style="margin-top:4px">Delete ${esc(p.name)}?</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+  const s = modal(`<header><div><div class="eyebrow" style="color:var(--red-600)">Permanent deletion</div><h2 style="margin-top:4px">Delete ${esc(p.name)}?</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
     <div class="body"><div class="notice bad">${ICON.info}<div><b>This can’t be undone.</b> It permanently erases ${esc(firstName(p.name))}’s volunteer record, <b>${recs} training record${recs === 1 ? '' : 's'}</b>, quiz attempts, emails and <b>their audit trail (${logs} entr${logs === 1 ? 'y' : 'ies'})</b>. Only an anonymous “volunteer deleted” entry is kept.</div></div>
       <p class="small muted">If they’ve simply stopped serving, <b>archive</b> them instead — that keeps their records for the ${retentionYears()}-year safeguarding audit, and they’re deleted automatically afterwards.</p>
       <div class="field"><label class="f">Type their email address to confirm</label><input class="input" id="dconf" placeholder="${esc(p.email)}" autocomplete="off"></div>
@@ -1425,13 +1447,14 @@ function exportAuditReport() {
 const SAMPLE_IMPORT = () => ['first_name,last_name,email', 'Sam,Irwin,sam.irwin@example.com', 'Niamh,Doherty,niamh.doherty@example.com', `Hannah,Doyle-Reid,hannah.doyle@example.com`, 'Laura,Kerr,laura.kerr@example.com', 'Ben,Hutchinson,ben.hutchinson@example', ',Smith,j.smith@example.com', 'Sam,Irwin,SAM.IRWIN@example.com'].join('\n');
 function importPeople() {
   const s = modal(`<header><div><div class="eyebrow">Bulk import</div><h2 style="margin-top:4px">Import volunteers from CSV</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
-  <div class="body" id="imbody"><p class="muted small" style="margin-top:0">Columns: <code>first_name, last_name, email</code> (optional: <code>roles</code>, <code>events</code> — separate several with <code>;</code>). Existing emails are updated — their training history is never touched. Archived volunteers in the file can be reactivated.</p>
+  <div class="body" id="imbody"><p class="muted small" style="margin-top:0">Columns: <code>first_name, last_name, email</code> (optional: <code>roles</code>, <code>events</code> — separate several with <code>;</code>). Existing emails are updated — their training history is never touched. Archived volunteers in the file can be reactivated. Have the <b>complete</b> list? <button class="linkbtn dark" id="tosync">Sync a full list instead</button> — it also archives anyone who’s no longer on it.</p>
     <div class="dropzone" id="dz"><b>Drop a CSV file here</b> or click to choose<input type="file" accept=".csv,text/csv" hidden id="fi"></div>
     <div class="row" style="margin-top:12px;gap:8px"><button class="btn ghost xs" id="tpl">${ICON.dl} Blank template</button><button class="btn ghost xs" id="smp">${ICON.dl} Sample file</button><button class="btn soft xs" id="smpgo">Try the sample now</button></div></div>`, 'wide');
   const dz = $('#dz', s), fi = $('#fi', s);
   dz.onclick = () => fi.click(); dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); }; dz.ondragleave = () => dz.classList.remove('over');
   dz.ondrop = e => { e.preventDefault(); e.dataTransfer.files[0] && e.dataTransfer.files[0].text().then(t => previewImport(t, e.dataTransfer.files[0].name)); };
   fi.onchange = () => fi.files[0] && fi.files[0].text().then(t => previewImport(t, fi.files[0].name));
+  $('#tosync', s).onclick = () => { closeModal(); rosterSync(); };
   $('#tpl', s).onclick = () => download('volunteer-import-template.csv', 'first_name,last_name,email\n');
   $('#smp', s).onclick = () => download('volunteer-import-sample.csv', SAMPLE_IMPORT());
   $('#smpgo', s).onclick = () => previewImport(SAMPLE_IMPORT(), 'volunteer-import-sample.csv');
@@ -1667,6 +1690,7 @@ function emailMenu(anchor, p) {
   m.innerHTML = `${r ? `<button data-em="now"><b>Send reminder now</b><span>${esc(r.rule.name)}</span></button><button data-em="sched"><b>Schedule a reminder…</b><span>Pick a day and time</span></button>` : `<div class="emnote">${p.archived ? 'Archived — emails are off' : 'Up to date — no reminder needed'}</div>`}
     ${p.archived ? '' : `<button data-em="write"><b>Write an email…</b><span>Custom message or any template</span></button>`}<button data-em="inbox"><b>Open their inbox</b><span>See what they’ve been sent (demo)</span></button>`;
   document.body.appendChild(m);
+  if (!anchor.offsetParent) anchor = anchor.closest('.more')?.querySelector('[data-act=more]') || anchor;
   const b = anchor.getBoundingClientRect(); const w = 260; m.style.left = Math.max(8, Math.min(innerWidth - w - 8, b.right - w)) + 'px';
   const top = b.bottom + 6; m.style.top = (top + m.offsetHeight > innerHeight - 8 ? b.top - m.offsetHeight - 6 : top) + scrollY + 'px';
   m.onclick = e => { const k = e.target.closest('[data-em]')?.dataset.em; if (!k) return; closeMenu();
@@ -1741,6 +1765,165 @@ function batchEvents() {
     ok.forEach(r => db.events.push({ id: uid('ev-'), name: r.name.trim(), date: r.date, endDate: r.endDate || r.date, location: r.location.trim(), requiredPathways: req, release: { ...rel } }));
     audit({ actor: 'admin', action: 'events_batch_added', detail: { count: ok.length, names: ok.map(r => r.name.trim()), release: rel.mode } });
     closeModal(); toast(`${ok.length} event${ok.length === 1 ? '' : 's'} added`); route(); };
+}
+
+/* =====================================================================
+   SYNC A FULL LIST — compare an up-to-date list with what we hold and
+   change only the differences (add, update, reactivate, archive / remove)
+   ===================================================================== */
+let lastSync = null;   // for undo
+const SYNC_SCOPES = () => [['volunteers', 'All volunteers', 'Anyone not on your list is archived'], ['staff', 'All staff', 'Anyone not on your list is archived'], ['all', 'Everyone (volunteers, staff and other)', 'Anyone not on your list is archived'],
+  ...[...db.events].sort((a, b) => a.date.localeCompare(b.date)).map(e => ['event:' + e.id, `${e.name} team`, 'Anyone not on your list is taken off this team (not archived)'])];
+function scopePeople(scope) {
+  if (scope.startsWith('event:')) { const id = scope.slice(6); return live().filter(p => p.eventIds.includes(id)); }
+  return scope === 'all' ? live() : live().filter(p => typeOf(p) === (scope === 'staff' ? 'staff' : 'volunteer'));
+}
+function readRows(text) {
+  text = text.replace(/^﻿/, '').trim(); if (!text) return { error: 'The list is empty.' };
+  const tsv = text.includes('\t');
+  let rows = tsv ? text.split(/\r?\n/).map(l => l.split('\t')) : parseCSV(text + '\n');
+  rows = rows.filter(r => r.some(c => (c || '').trim()));
+  const first = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  let head;
+  if (first.includes('email')) { head = first.map(h => ({ first: 'first_name', firstname: 'first_name', forename: 'first_name', surname: 'last_name', last: 'last_name', lastname: 'last_name', 'e-mail': 'email', email_address: 'email', role: 'roles', event: 'events' }[h] || h)); rows.shift(); }
+  else head = ['first_name', 'last_name', 'email', 'roles', 'events'];   // no header row: assume this order
+  if (!head.includes('email') || !(head.includes('first_name') || head.includes('name'))) return { error: 'Couldn’t find the columns. Use first_name, last_name, email (roles and events are optional).' };
+  return { rows: rows.map((r, i) => { const o = Object.fromEntries(head.map((h, k) => [h, (r[k] || '').trim()]));
+    if (!o.first_name && o.name) Object.assign(o, (n => ({ first_name: n.first_name, last_name: n.last_name }))(splitName(o.name)));
+    return { line: i + 2, o: { ...o, email: (o.email || '').toLowerCase() } }; }), hasRoles: head.includes('roles'), hasEvents: head.includes('events') };
+}
+function analyseSync(text, scope) {
+  const R = readRows(text); if (R.error) return R;
+  const evScope = scope.startsWith('event:') ? EventById(scope.slice(6)) : null;
+  const inScope = new Set(scopePeople(scope).map(p => p.id)), seen = new Set(), matched = new Set(), byEmail = new Map(db.people.map(p => [p.email.toLowerCase(), p]));
+  const out = { create: [], update: [], join: [], reactivate: [], same: [], invalid: [], missing: [], maybe: [], evScope, hasRoles: R.hasRoles, hasEvents: R.hasEvents };
+  R.rows.forEach(r => { const o = r.o;
+    if (!o.first_name || !o.last_name) return out.invalid.push({ ...r, why: 'First and last name are both needed' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.email)) return out.invalid.push({ ...r, why: 'Not a valid email address' });
+    if (seen.has(o.email)) return out.invalid.push({ ...r, why: 'Listed twice' }); seen.add(o.email);
+    r.roles = R.hasRoles ? o.roles.split(';').map(x => x.trim()).filter(Boolean) : null;
+    r.eventIds = R.hasEvents ? o.events.split(';').map(n => db.events.find(e => e.name.toLowerCase() === n.trim().toLowerCase())?.id).filter(Boolean) : [];
+    if (evScope && !r.eventIds.includes(evScope.id)) r.eventIds.push(evScope.id);
+    const ex = byEmail.get(o.email); r.ex = ex;
+    if (!ex) { const twin = live().find(p => p.first_name.toLowerCase() === o.first_name.toLowerCase() && p.last_name.toLowerCase() === o.last_name.toLowerCase()); r.twin = twin; if (twin) out.maybe.push(r); return out.create.push(r); }
+    matched.add(ex.id);
+    r.changes = [];
+    if (ex.first_name !== o.first_name || ex.last_name !== o.last_name) r.changes.push(['Name', ex.name, `${o.first_name} ${o.last_name}`]);
+    if (r.roles && r.roles.length && r.roles.slice().sort().join() !== ex.roles.slice().sort().join()) r.changes.push(['Roles', ex.roles.join(', ') || '—', r.roles.join(', ')]);
+    const newEv = r.eventIds.filter(id => !ex.eventIds.includes(id) && (!evScope || id !== evScope.id));
+    if (newEv.length) r.changes.push(['Events', '', '+ ' + newEv.map(id => EventById(id).name).join(', ')]);
+    if (ex.archived) return out.reactivate.push(r);
+    if (evScope && !ex.eventIds.includes(evScope.id)) return out.join.push(r);
+    if (!evScope && !inScope.has(ex.id)) { r.changes.push(['Type', typeOf(ex), '(listed here)']); }
+    r.changes.length ? out.update.push(r) : out.same.push(r);
+  });
+  out.missing = scopePeople(scope).filter(p => !matched.has(p.id)).map(p => ({ p, twinOf: out.maybe.find(r => r.twin === p) }));
+  out.scopeSize = inScope.size;
+  return out;
+}
+function rosterSync(preScope = 'volunteers') {
+  const s = modal(`<header><div><div class="eyebrow">People</div><h2 style="margin-top:4px">Sync a full list</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body" id="sybody">
+      <p class="small muted" style="margin-top:0">Upload or paste the <b>complete, current list</b> — for example at the start of a new year, or the final team for a camp. We compare it with what’s here and only change the differences. You’ll check everything before anything happens.</p>
+      <div class="field"><label class="f">What is this a list of?</label><select class="input" id="syscope">${SYNC_SCOPES().map(([k, l]) => `<option value="${k}" ${k === preScope ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select><div class="help" id="syhelp"></div></div>
+      <div class="dropzone" id="sydz"><b>Drop a CSV file here</b> or click to choose<input type="file" accept=".csv,.tsv,.txt,text/csv" hidden id="syfi"></div>
+      <div class="field" style="margin-top:12px"><label class="f">…or paste from a spreadsheet</label><textarea class="input" id="sypaste" rows="4" placeholder="first_name	last_name	email\nNiamh	Doherty	niamh.doherty@example.com"></textarea><div class="help">Columns: first_name, last_name, email — optional roles and events (separate several with ;). Copy straight from Excel or Google Sheets.</div></div>
+      <div class="row" style="gap:8px"><button class="btn red sm" id="sygo">Compare with what’s here</button><button class="btn ghost sm" id="sysample">Try with a sample list</button></div>
+    </div>`, 'wide');
+  const help = () => { const sc = $('#syscope', s).value; $('#syhelp', s).textContent = `${scopePeople(sc).length} currently. ${SYNC_SCOPES().find(x => x[0] === sc)[2]}.`; };
+  help(); $('#syscope', s).onchange = help;
+  const dz = $('#sydz', s), fi = $('#syfi', s), run = (t, name) => syncPreview(t, name, $('#syscope', s).value);
+  dz.onclick = () => fi.click(); dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); }; dz.ondragleave = () => dz.classList.remove('over');
+  dz.ondrop = e => { e.preventDefault(); const f = e.dataTransfer.files[0]; f && f.text().then(t => run(t, f.name)); };
+  fi.onchange = () => fi.files[0] && fi.files[0].text().then(t => run(t, fi.files[0].name));
+  $('#sygo', s).onclick = () => { const t = $('#sypaste', s).value; if (!t.trim()) { toast('Paste a list or choose a file'); return; } run(t, 'pasted list'); };
+  $('#sysample', s).onclick = () => run(sampleSyncList($('#syscope', s).value), 'sample list');
+}
+/* demo: the current list with a few realistic differences */
+function sampleSyncList(scope) {
+  const cur = scopePeople(scope).sort((a, b) => a.last_name.localeCompare(b.last_name));
+  const drop = new Set(cur.filter((_, i) => i % 9 === 4).slice(0, 4).map(p => p.id));
+  const rows = cur.filter(p => !drop.has(p.id)).map((p, i) => [i === 2 ? p.first_name + '-Jane' : p.first_name, p.last_name, p.email]);
+  rows.push(['Orla', 'Fitzpatrick', 'orla.fitzpatrick@example.com'], ['Conor', 'Magee', 'conor.magee@example.com']);
+  const arch = db.people.find(p => p.archived); if (arch && !scope.startsWith('event:')) rows.push([arch.first_name, arch.last_name, arch.email]);
+  const tw = cur.find(p => !drop.has(p.id) && p !== cur[2]); if (tw) rows.push([tw.first_name, tw.last_name, tw.first_name.toLowerCase() + '.' + tw.last_name.toLowerCase().replace(/[^a-z]/g, '') + '@newmail.example']);
+  return ['first_name\tlast_name\temail', ...rows.map(r => r.join('\t'))].join('\n');
+}
+function syncPreview(text, fname, scope) {
+  const a = analyseSync(text, scope); const body = $('#sybody'); if (!body) return;
+  if (a.error) { toast(a.error); return; }
+  const ev = a.evScope, missVerb = ev ? 'Take off the team' : 'Archive';
+  const sec = (key, title, list, render, { cls = '', on = true, help = '' } = {}) => list.length ? `<div class="imsec ${cls}" data-sec="${key}"><div class="imh"><label class="row" style="gap:8px;cursor:pointer"><input type="checkbox" data-all="${key}" ${on ? 'checked' : ''}><b>${title}</b></label><span class="tag">${list.length}</span></div>${help ? `<div class="tiny muted" style="margin:-2px 0 6px">${help}</div>` : ''}
+    <div class="sylist">${list.map((r, i) => `<label class="imrow syrow"><input type="checkbox" data-k="${key}" data-i="${i}" ${on ? 'checked' : ''}><span>${render(r)}</span></label>`).join('')}</div></div>` : '';
+  const nm = r => `<b>${esc(r.o.first_name)} ${esc(r.o.last_name)}</b> <span class="muted">· ${esc(r.o.email)}</span>`;
+  const diff = r => r.changes.map(([f, from, to]) => `<span class="sydiff"><span class="muted">${f}:</span> ${from ? `<s>${esc(from)}</s> → ` : ''}<b>${esc(to)}</b></span>`).join('');
+  const bigDrop = a.scopeSize && a.missing.length / a.scopeSize > .3;
+  body.innerHTML = `<div class="row between" style="margin-bottom:12px"><span class="small"><b>${esc(fname)}</b> · compared with <b>${esc(SYNC_SCOPES().find(x => x[0] === scope)[1])}</b> (${a.scopeSize})</span><button class="btn ghost xs" id="syback">Start again</button></div>
+    <div class="imgrid">${[['To add', a.create.length + a.join.length, 'var(--teal)'], ['To update', a.update.length, 'var(--sky)'], ['To reactivate', a.reactivate.length, 'var(--amber)'], [ev ? 'Off the team' : 'To archive', a.missing.length, 'var(--red)'], ['No change', a.same.length, '#CFC8C0']].map(([l, n, c]) => `<div style="--c:${c}"><b>${n}</b><span>${l}</span></div>`).join('')}</div>
+    ${bigDrop ? `<div class="notice warn small" style="margin-bottom:12px">${ICON.info}<div><b>${a.missing.length} of ${a.scopeSize} people aren’t on this list.</b> That’s a lot — check you’ve chosen the right list type above and that the file is complete.</div></div>` : ''}
+    ${a.maybe.length ? `<div class="imsec warn"><div class="imh"><b>Same name, different email</b><span class="tag">${a.maybe.length}</span></div><div class="tiny muted" style="margin:-2px 0 6px">Tick if it’s the same person with a new email — we’ll update them instead of adding someone new.</div>
+      ${a.maybe.map((r, i) => `<label class="imrow syrow"><input type="checkbox" data-twin="${i}"><span><b>${esc(r.twin.name)}</b>: <s>${esc(r.twin.email)}</s> → <b>${esc(r.o.email)}</b></span></label>`).join('')}</div>` : ''}
+    ${sec('create', 'New people', a.create, r => `${nm(r)}${r.twin ? ' <span class="tag" style="background:var(--amber-50)">see above</span>' : ''}`, { help: ev ? `Added and put on the ${esc(ev.name)} team.` : '' })}
+    ${sec('join', `Already here — add to ${ev ? esc(ev.name) : 'list'}`, a.join, r => `${nm(r)}${r.changes.length ? '<br>' + diff(r) : ''}`)}
+    ${sec('update', 'Details changed', a.update, r => `${nm(r)}<br>${diff(r)}`, { help: 'Only the fields shown change. Training history is never touched.' })}
+    ${sec('reactivate', 'Archived — back on the list', a.reactivate, r => { const pv = reactivationPreview(r.ex); return `${nm(r)}<br><span class="tiny muted">Archived ${fmtDate(r.ex.archivedAt)} · ${pv.keep.length} record${pv.keep.length === 1 ? '' : 's'} kept${pv.purge.length ? `, ${pv.purge.length} over ${retentionYears()} years old removed` : ''}</span>`; }, { cls: 'warn' })}
+    ${sec('missing', ev ? `Not on your list — take off the ${esc(ev.name)} team` : 'Not on your list — archive', a.missing, m => { const up = m.p.eventIds.map(EventById).filter(e => e && new Date(e.endDate || e.date) >= new Date() && (!ev || e.id !== ev.id));
+      return `<b>${esc(m.p.name)}</b> <span class="muted">· ${esc(m.p.email)}</span>${m.twinOf ? ' <span class="tag" style="background:var(--amber-50)">maybe listed with a new email</span>' : ''}${up.length && !ev ? `<br><span class="tiny" style="color:#8A5508">Still signed up for ${up.map(e => esc(e.name)).join(', ')}</span>` : ''}`; }, { cls: 'bad', help: ev ? 'They stay on the system and keep their training — they’re just no longer on this team.' : `Archived people can’t sign in or get emails. Records are kept for ${retentionYears()} years and you can reactivate any time. Untick anyone to leave them as they are.` })}
+    ${sec('invalid', 'Rows we’ll skip', a.invalid, r => `Row ${r.line}: ${esc([r.o.first_name, r.o.last_name].filter(Boolean).join(' ') || '(no name)')} <span class="muted">· ${esc(r.o.email || 'no email')}</span> — <span style="color:var(--red-600)">${esc(r.why)}</span>`, { cls: 'bad', on: false })}
+    ${a.same.length ? `<p class="tiny muted">${a.same.length} ${a.same.length === 1 ? 'person matches' : 'people match'} exactly — they won’t be touched.</p>` : ''}
+    <label class="row small" style="gap:8px;margin-top:10px;cursor:pointer"><input type="checkbox" id="syinv" checked> Send training invites to people who are added${ev && !isReleased(ev) ? ` (held until ${esc(releaseLabel(ev).replace(/^Invites go out /, ''))})` : ''}</label>`;
+  $$('[data-k=invalid]', body).forEach(c => c.disabled = true); $$('[data-all=invalid]', body).forEach(c => c.disabled = true);
+  const foot = $('#scrim footer') || (() => { const f = document.createElement('footer'); $('#scrim .modal').appendChild(f); return f; })();
+  const picked = k => $$(`[data-k=${k}]:checked`, body).map(c => (k === 'missing' ? a.missing : a[k])[+c.dataset.i]);
+  const twins = () => $$('[data-twin]:checked', body).map(c => a.maybe[+c.dataset.twin]);
+  const count = () => { const tw = new Set(twins()); return picked('create').filter(r => !tw.has(r)).length + tw.size + picked('join').length + picked('update').length + picked('reactivate').length + picked('missing').filter(m => !twins().some(t => t.twin === m.p)).length; };
+  const upd = () => { const n = count(); $('#sygo2').textContent = n ? `Apply ${n} change${n === 1 ? '' : 's'}` : 'Nothing to change'; $('#sygo2').disabled = !n;
+    $$('[data-all]', body).forEach(c => { const all = $$(`[data-k=${c.dataset.all}]`, body); c.checked = all.length && all.every(x => x.checked); c.indeterminate = !c.checked && all.some(x => x.checked); }); };
+  foot.innerHTML = `<span class="small muted" style="margin-right:auto;align-self:center">You can undo this straight after</span><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="sygo2"></button>`;
+  $$('[data-all]', body).forEach(c => c.onchange = () => { $$(`[data-k=${c.dataset.all}]`, body).forEach(x => x.checked = c.checked); upd(); });
+  body.addEventListener('change', e => { if (e.target.matches('[data-k],[data-twin]')) upd(); });
+  upd();
+  $('#syback').onclick = () => { closeModal(); rosterSync(scope); };
+  $('#sygo2').onclick = () => applySync(a, { create: picked('create'), join: picked('join'), update: picked('update'), reactivate: picked('reactivate'), missing: picked('missing'), twins: twins(), invite: $('#syinv').checked, scope, fname });
+}
+function applySync(a, sel) {
+  const ev = a.evScope; const snap = new Map(); const keep = p => { if (!snap.has(p.id)) snap.set(p.id, JSON.parse(JSON.stringify(p))); };
+  const auditStart = db.audit.length, completionsBefore = db.completions.slice(); const created = [];
+  const res = { added: 0, joined: 0, updated: 0, reactivated: 0, archived: 0, removed: 0, invites: 0 };
+  const applyFields = (p, r) => { if (p.first_name !== r.o.first_name || p.last_name !== r.o.last_name) setName(p, r.o.first_name, r.o.last_name); if (r.roles && r.roles.length) p.roles = r.roles; r.eventIds.forEach(id => p.eventIds.includes(id) || p.eventIds.push(id)); };
+  const invite = p => { if (sel.invite && autoEmail('assigned', p, { event: ev || undefined, key: 'sync' + (ev ? ev.id : '') }) !== 'held') res.invites += 0; };
+  const twinSet = new Set(sel.twins);
+  sel.twins.forEach(r => { const p = r.twin; keep(p); const old = p.email; p.email = r.o.email; applyFields(p, r); res.updated++;
+    audit({ actor: 'admin', action: 'volunteer_updated', personId: p.id, detail: { name: p.name, changes: [`email: ${old} → ${p.email}`], source: 'List sync' } }); });
+  sel.create.filter(r => !twinSet.has(r)).forEach(r => { const p = setName({ id: uid('u_'), token: uid('inv-'), createdAt: now(), email: r.o.email, type: a.evScope ? 'volunteer' : (sel.scope === 'staff' ? 'staff' : 'volunteer'), roles: r.roles || [], eventIds: r.eventIds.slice(), org: '', notes: '', accessNI: { status: 'not_requested', date: '' } }, r.o.first_name, r.o.last_name);
+    db.people.push(p); created.push(p.id); res.added++; audit({ actor: 'admin', action: 'volunteer_created', personId: p.id, detail: { name: p.name, source: 'List sync' } }); invite(p); });
+  sel.join.forEach(r => { keep(r.ex); applyFields(r.ex, r); res.joined++; audit({ actor: 'admin', action: 'volunteer_updated', personId: r.ex.id, detail: { name: r.ex.name, changes: [`added to ${ev.name}`, ...r.changes.map(c => c[0].toLowerCase())], source: 'List sync' } }); invite(r.ex); });
+  sel.update.forEach(r => { keep(r.ex); applyFields(r.ex, r); res.updated++; audit({ actor: 'admin', action: 'volunteer_updated', personId: r.ex.id, detail: { name: r.ex.name, changes: r.changes.map(([f, x, y]) => `${f.toLowerCase()}: ${x ? x + ' → ' : ''}${y}`), source: 'List sync' } }); });
+  sel.reactivate.forEach(r => { keep(r.ex); applyFields(r.ex, r); reactivateVolunteer(r.ex, 'List sync'); res.reactivated++; });
+  sel.missing.filter(m => !sel.twins.some(t => t.twin === m.p)).forEach(({ p }) => { keep(p);
+    if (ev) { p.eventIds = p.eventIds.filter(x => x !== ev.id); res.removed++; audit({ actor: 'admin', action: 'volunteer_updated', personId: p.id, detail: { name: p.name, changes: [`removed from ${ev.name}`], source: 'List sync' } }); }
+    else { archiveVolunteer(p, 'Not on the latest list'); res.archived++; } });
+  audit({ actor: 'admin', action: 'list_synced', detail: { list: SYNC_SCOPES().find(x => x[0] === sel.scope)[1], file: sel.fname, ...res, skipped: a.invalid.length, unchanged: a.same.length } });
+  lastSync = { snap: [...snap.values()], created, completions: completionsBefore, at: now(), res, scope: sel.scope };
+  closeModal(); syncDone(res, ev);
+}
+function syncDone(res, ev) {
+  const line = [res.added && `${res.added} added`, res.joined && `${res.joined} added to the team`, res.updated && `${res.updated} updated`, res.reactivated && `${res.reactivated} reactivated`, res.archived && `${res.archived} archived`, res.removed && `${res.removed} taken off the team`].filter(Boolean);
+  const s = modal(`<header><div><div class="eyebrow">List synced</div><h2 style="margin-top:4px">${line.length ? 'Done — only the differences changed' : 'Nothing needed changing'}</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body"><ul class="small" style="margin:0;padding-left:18px;line-height:1.8">${line.map(l => `<li>${l}</li>`).join('')}</ul>
+      <p class="tiny muted" style="margin:12px 0 0">Every change is in the audit log. Anyone else was left exactly as they were.</p></div>
+    <footer><button class="btn ghost" id="syundo" style="margin-right:auto">Undo this sync</button><button class="btn red" data-close>Done</button></footer>`);
+  $('#syundo', s).onclick = () => { undoSync(); closeModal(); };
+  watchModalClose(() => route());
+}
+function undoSync() {
+  if (!lastSync) return;
+  const created = new Set(lastSync.created);
+  db.people = db.people.filter(p => !created.has(p.id));
+  lastSync.snap.forEach(o => { const p = Person(o.id); if (p) { Object.keys(p).forEach(k => delete p[k]); Object.assign(p, o); } });
+  db.completions = lastSync.completions;   // brings back anything removed when reactivating
+  audit({ actor: 'admin', action: 'list_sync_undone', detail: { at: lastSync.at, ...lastSync.res } });
+  lastSync = null; toast('Sync undone — everyone is back as they were'); route();
 }
 
 /* ---------- background jobs (demo: run while the app is open) ---------- */

@@ -50,3 +50,23 @@ The demo simulates a backend for up to ~3,000 volunteers with no database or ema
 - **Training release per event**: send invites as soon as people are added, a set number of weeks before the event, on a date you choose, or hold them until you release them. People can be added any time; invites and that event's reminders wait until release.
 - **People multi-select**: tick rows or a whole page, or select everyone matching the filters. Then send reminders, email, add to an event, archive or reactivate.
 - **Add several events**: type the events into the grid, or paste them from a spreadsheet. Training and release settings are shared across all of them.
+
+## Syncing a full list
+
+People → **Sync a full list…** (or **Sync team from a list…** on an event). Upload or paste the complete current list (first_name, last_name, email; roles and events are optional). It's compared with what's already here:
+- new people are added
+- changed details are updated (training history is never touched)
+- archived people on the list are reactivated
+- anyone not on the list is archived (or taken off that event's team)
+
+Everyone else is left alone. Each group and each person can be unticked before applying. Same-name, different-email matches are flagged so you can update the email instead of creating a duplicate. A warning appears if more than 30% of the list would be archived. Every change is audit-logged, and **Undo this sync** restores everything straight after.
+
+## Accessibility
+
+Checked with axe-core against WCAG 2.0–2.2 A/AA on every page and the main dialogs, at desktop and phone sizes, with no violations. Built in:
+- touch targets of at least 24px everywhere and 44px on touch screens
+- a skip link, visible focus rings, and focus kept inside dialogs (focus returns afterwards)
+- Escape closes menus and dialogs
+- labelled controls, and live announcements for page changes and toasts
+- an accessible video slider and an AA-contrast palette
+- respect for reduced-motion and increased-contrast settings
