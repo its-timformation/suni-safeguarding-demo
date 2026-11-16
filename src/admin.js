@@ -888,6 +888,7 @@ const stripRev = p => JSON.parse(JSON.stringify(p, (k, v) => k === 'rev' ? undef
 /* step editor modal */
 function stepEditor(step, done, isNew) {
   const work = JSON.parse(JSON.stringify(step));
+  const openQs = new Set();
   const s = modal(`<header><h2>${{ video: 'Video step', read: 'Reading step', quiz: 'Quiz step' }[work.type]}</h2><button class="iconbtn" data-close>${ICON.x}</button></header><div class="body" id="seb"></div>
     <footer><button class="btn ghost" id="sdel" style="margin-right:auto;color:var(--red)">${ICON.trash} Remove step</button><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="ssave">Done</button></footer>`, work.type === 'quiz' ? 'wide' : '');
   const body = $('#seb', s);
@@ -926,7 +927,7 @@ function stepEditor(step, done, isNew) {
   const drawQuiz = () => {
     body.innerHTML = common + `<div class="grid g3"><div class="field"><label class="f">Questions per attempt</label><input class="input" type="number" min="1" max="20" id="qd" value="${work.drawCount}"></div>
       <div class="field"><label class="f">Pass mark (%)</label><input class="input" type="number" min="1" max="100" id="qp" value="${work.passMark}"></div>
-      <div class="field"><label class="f">Pass mark</label><div class="help" style="margin-top:12px">Learners need ${work.passMark}% or more.</div></div></div>
+      <div class="field"><label class="f">Question bank</label><div class="help" style="margin-top:12px">${work.questions.length} questions · each attempt draws ${work.drawCount}${work.questions.length < work.drawCount * 2 ? ' — <b style="color:#A86A0C">add more so retakes feel fresh</b>' : ''}</div></div></div>
       <div class="lockset"><label class="switch"><input type="checkbox" id="qlock" ${work.lock !== false ? 'checked' : ''}><span></span></label>
         <div style="flex:1"><b>Lock the quiz after repeated failed attempts</b><div class="small muted">When locked, the volunteer is told someone will be in touch, and admins are asked to follow up before reopening it.</div>
         <div class="row" id="qlockn" style="margin-top:10px;gap:8px;${work.lock !== false ? '' : 'display:none'}"><span class="small">Lock after</span><input class="input" type="number" min="1" max="10" id="qa" value="${work.maxAttempts}" style="width:80px"><span class="small">failed attempts</span></div>
@@ -934,16 +935,30 @@ function stepEditor(step, done, isNew) {
       <div class="field"><label class="f">Show answers</label><div class="seg" id="qfbseg">${[['instant', 'After each question'], ['end', 'At the end only']].map(([k, l]) => `<button data-fb="${k}" class="${(work.feedback || 'instant') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="help">“After each question” helps people learn as they go. “At the end only” is closer to a formal test — learners see which ones they got wrong, with explanations, but not the right answers.</div></div>
       <div class="row between" style="margin:6px 0 10px"><h3>Question bank <span class="muted" style="font-weight:600">(${work.questions.length})</span></h3><div class="row"><button class="btn ghost xs" id="qcsv">Import CSV</button><button class="btn soft xs" id="qadd">+ Add question</button></div></div>
-      <div class="stack" id="qlist">${work.questions.map((q, i) => `<div class="qedit" data-qi="${i}">
-        <div class="row between"><span class="tiny muted" style="font-weight:700">Q${i + 1}</span><button class="iconbtn" data-qdel="${i}" title="Delete question">${ICON.trash}</button></div>
-        <textarea class="input" data-qf="text" style="min-height:54px;margin-top:6px" placeholder="Question">${esc(q.text)}</textarea>
-        ${q.options.map((o, k) => `<div class="optrow"><input type="radio" name="qc${i}" value="${k}" ${q.correct === k ? 'checked' : ''} title="Mark as correct answer"><input class="input" data-qo="${k}" value="${esc(o)}" placeholder="Option ${'ABCD'[k]}" style="padding:8px 10px"></div>`).join('')}
-        <input class="input" data-qf="explanation" value="${esc(q.explanation || '')}" placeholder="Explanation shown after the quiz" style="margin-top:8px;padding:8px 10px;font-size:14px">
-      </div>`).join('') || '<div class="empty">No questions yet</div>'}</div>
+      <div class="qtools"><button class="btn ghost xs" data-qall="1">Expand all</button><button class="btn ghost xs" data-qall="0">Collapse all</button></div>
+      <div class="qlist" id="qlist">${work.questions.map((q, i) => { const bad = !q.text.trim() || q.options.filter(o => o.trim()).length < 2 || !(q.options[q.correct] || '').trim();
+        return `<div class="qitem ${openQs.has(q.id) ? 'open' : ''}" data-qid="${q.id}">
+        <button type="button" class="qsum" aria-expanded="${openQs.has(q.id)}"><span class="qn">Q${i + 1}</span><span class="qs-main"><span class="qs-text">${esc(q.text) || '<i class="muted">New question</i>'}</span><span class="qs-ans">${(q.options[q.correct] || '').trim() ? `✓ ${esc(q.options[q.correct])}` : ''}</span></span>${bad ? '<span class="qwarn">Incomplete</span>' : ''}<span class="qchev">${ICON.down}</span></button>
+        <div class="qedit" data-qi="${i}">
+          <textarea class="input" data-qf="text" style="min-height:54px" placeholder="Question">${esc(q.text)}</textarea>
+          ${q.options.map((o, k) => `<div class="optrow"><input type="radio" name="qc${i}" value="${k}" ${q.correct === k ? 'checked' : ''} title="Mark as correct answer"><input class="input" data-qo="${k}" value="${esc(o)}" placeholder="Option ${'ABCD'[k]}" style="padding:8px 10px"></div>`).join('')}
+          <input class="input" data-qf="explanation" value="${esc(q.explanation || '')}" placeholder="Explanation shown after the quiz" style="margin-top:8px;padding:8px 10px;font-size:14px">
+          <div class="row between" style="margin-top:10px"><button class="btn ghost xs" data-qdel="${i}" style="color:var(--red-600)">${ICON.trash} Delete question</button><button class="btn ghost xs" data-qdone="${q.id}">Done</button></div>
+        </div></div>`; }).join('') || '<div class="empty">No questions yet</div>'}</div>
+      <button type="button" class="qaddbig" id="qadd2">+ Add question</button>
       <p class="tiny muted">Select the circle next to the correct answer. Answer order is shuffled for each learner.</p>`;
     $$('[data-fb]', body).forEach(b => b.onclick = () => { keep(); work.feedback = b.dataset.fb; drawQuiz(); });
     $('#qlock', body).onchange = e => { $('#qlockn', body).style.display = e.target.checked ? '' : 'none'; $('#qlockoff', body).style.display = e.target.checked ? 'none' : ''; };
-    $('#qadd', body).onclick = () => { keep(); work.questions.push({ id: uid('q_'), text: '', options: ['', '', '', ''], correct: 0, explanation: '' }); drawQuiz(); $$('.qedit textarea', body).pop()?.focus(); };
+    const addQ = () => { keep(); const q = { id: uid('q_'), text: '', options: ['', '', '', ''], correct: 0, explanation: '' }; work.questions.push(q); openQs.add(q.id); drawQuiz(); const el = $(`[data-qid="${q.id}"]`, body); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => $('textarea', el)?.focus(), 250); };
+    $('#qadd', body).onclick = addQ; $('#qadd2', body).onclick = addQ;
+    $$('.qsum', body).forEach(b => b.onclick = () => { const it = b.closest('.qitem'), id = it.dataset.qid; const open = !it.classList.contains('open'); it.classList.toggle('open', open); b.setAttribute('aria-expanded', open); open ? openQs.add(id) : openQs.delete(id); if (open) setTimeout(() => $('textarea', it)?.focus(), 30); });
+    $$('[data-qdone]', body).forEach(b => b.onclick = () => { keep(); openQs.delete(b.dataset.qdone); drawQuiz(); });
+    $$('[data-qall]', body).forEach(b => b.onclick = () => { keep(); work.questions.forEach(q => b.dataset.qall === '1' ? openQs.add(q.id) : openQs.delete(q.id)); drawQuiz(); });
+    $$('.qedit', body).forEach(el => el.addEventListener('input', () => { const it = el.closest('.qitem'), i = +el.dataset.qi; const t = $('[data-qf=text]', el).value, opts = $$('[data-qo]', el).map(x => x.value), c = +($('input[type=radio]:checked', el)?.value || 0);
+      $('.qs-text', it).innerHTML = esc(t) || '<i class="muted">New question</i>'; $('.qs-ans', it).textContent = (opts[c] || '').trim() ? '✓ ' + opts[c] : '';
+      const bad = !t.trim() || opts.filter(o => o.trim()).length < 2 || !(opts[c] || '').trim(); let w = $('.qwarn', it);
+      if (bad && !w) { w = document.createElement('span'); w.className = 'qwarn'; w.textContent = 'Incomplete'; $('.qchev', it).before(w); } else if (!bad && w) w.remove(); }));
+    $$('.qedit input[type=radio]', body).forEach(r => r.addEventListener('change', () => r.closest('.qedit').dispatchEvent(new Event('input'))));
     $$('[data-qdel]', body).forEach(b => b.onclick = () => { keep(); work.questions.splice(+b.dataset.qdel, 1); drawQuiz(); });
     $('#qcsv', body).onclick = () => {
       const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.csv';

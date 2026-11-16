@@ -289,6 +289,24 @@ tbody tr:hover{background:#FCFAF7}
 .addlist{max-height:52vh;overflow:auto;display:grid;gap:6px}
 .addrow{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
 .addrow input{accent-color:var(--red);width:18px;height:18px}.addrow:has(input:checked){border-color:var(--red);background:var(--red-50)}
+.qtools{display:flex;gap:6px;justify-content:flex-end;margin:-4px 0 8px}
+.qlist{display:grid;gap:6px}
+.qitem{border:1.5px solid var(--line);border-radius:14px;background:#fff;overflow:hidden;transition:border .15s,box-shadow .15s}
+.qitem.open{border-color:#D8CFC6;box-shadow:var(--sh-1)}
+.qsum{display:flex;align-items:center;gap:12px;width:100%;border:0;background:none;text-align:left;padding:10px 14px;cursor:pointer}
+.qsum:hover{background:#FCFAF7}
+.qn{flex:none;font-weight:800;font-size:13px;color:var(--muted);width:32px;font-variant-numeric:tabular-nums}
+.qs-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.qs-text{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qs-ans{font-size:12.5px;color:var(--teal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qitem.open .qs-text{white-space:normal}
+.qwarn{flex:none;font-size:12px;font-weight:700;color:#A86A0C;background:var(--amber-50);border-radius:99px;padding:2px 8px}
+.qchev{flex:none;color:var(--muted);transition:transform .2s var(--ease)}.qchev svg{display:block}
+.qitem.open .qchev{transform:rotate(180deg)}
+.qitem .qedit{display:none;border:0;border-top:1px solid #F1EDE8;border-radius:0;padding:12px 14px 14px}
+.qitem.open .qedit{display:block}
+.qaddbig{width:100%;margin-top:8px;border:1.5px dashed var(--line);background:none;border-radius:14px;padding:12px;font-weight:700;color:var(--red-600);cursor:pointer}
+.qaddbig:hover{border-color:var(--red);background:var(--red-50)}
 /* segmented readiness bar */
 .segbar{display:flex;height:12px;border-radius:99px;overflow:hidden;gap:2px;background:#F0EEEB}
 .segbar a{display:block;min-width:4px;transition:filter .15s,transform .15s}
