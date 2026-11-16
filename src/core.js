@@ -84,7 +84,7 @@ const Rows = {
   person: r => ({ id: r.id, first_name: r.first_name, last_name: r.last_name, name: `${r.first_name} ${r.last_name}`.trim(), email: r.email, archived: r.status === 'archived', archivedAt: r.archived_at, createdAt: r.created_at,
     type: r.profile?.type, phone: r.profile?.phone, org: r.profile?.org, roles: r.profile?.roles || [], eventIds: r.profile?.event_ids || [], notes: r.profile?.notes, accessNI: r.profile?.access_ni, token: r.profile?.invite_token || uid('inv-'), featured: r.profile?.featured }),
   record: c => ({ id: c.id, volunteer_id: c.personId, module_name: c.pathwayTitle, completed_at: c.completedAt,
-    details: { pathway_id: c.pathwayId, expires_at: c.expiresAt, version: c.version, score: c.score, attestation_name: c.attestationName, attestation_text: c.attestationText, manual: c.manual || null, revoked: c.revoked || null, edits: c.edits || [], name_on_cert: c.nameOnCert || null, reissued_from: c.reissuedFrom || null } }),
+    details: { pathway_id: c.pathwayId, expires_at: c.expiresAt, version: c.version, version_label: verLabel(db.pathways?.find(x => x.id === c.pathwayId), c.version), score: c.score, attestation_name: c.attestationName, attestation_text: c.attestationText, manual: c.manual || null, revoked: c.revoked || null, edits: c.edits || [], name_on_cert: c.nameOnCert || null, reissued_from: c.reissuedFrom || null } }),
   completion: r => ({ id: r.id, personId: r.volunteer_id, pathwayTitle: r.module_name, completedAt: r.completed_at, pathwayId: r.details?.pathway_id, expiresAt: r.details?.expires_at, version: r.details?.version, score: r.details?.score, attestationName: r.details?.attestation_name, attestationText: r.details?.attestation_text,
     manual: r.details?.manual || undefined, revoked: r.details?.revoked || null, edits: r.details?.edits || [], nameOnCert: r.details?.name_on_cert || undefined, reissuedFrom: r.details?.reissued_from || undefined }),
   auditRow: a => ({ id: a.id, created_at: a.at, volunteer_id: a.personId || null, actor: a.actor, action: a.action, details: { pathway_id: a.pathwayId, version: a.version, step_id: a.stepId, ...(a.detail ? { data: a.detail } : {}) } }),
@@ -158,6 +158,16 @@ function requiredPathwaysFor(person) {
   person.eventIds.forEach(eid => { const e = EventById(eid); if (e) e.requiredPathways.forEach(id => ids.add(id)); });
   return [...ids].map(P).filter(Boolean);
 }
+/* versions: stored as a running number (1, 2, 3…) for records, shown as major.minor (1.0, 1.1, 2.0…)
+   minor = small fixes; major = content changes everyone should see */
+function verLabel(pw, n) {
+  if (!pw) return n ? `${n}.0` : '—';
+  n = n ?? pw.version; if (!n) return 'draft';
+  const v = (pw.versions || []).find(x => x.version === n);
+  return v?.label || `${n}.0`;
+}
+const vTag = (pw, n) => 'v' + verLabel(pw, n);
+function nextLabel(pw, kind) { const [M, m] = verLabel(pw).split('.').map(Number); return pw.version ? (kind === 'major' ? `${M + 1}.0` : `${M}.${(m || 0) + 1}`) : '1.0'; }
 function latestCompletion(personId, pathwayId) {
   const st = db.completions.length + ':' + persistCount;
   if (_cStamp !== st) { _cIdx = new Map(); for (const c of db.completions) { if (c.revoked) continue; const k = c.personId + '|' + c.pathwayId, cur = _cIdx.get(k); if (!cur || c.completedAt > cur.completedAt) _cIdx.set(k, c); } _cStamp = st; }
@@ -265,7 +275,7 @@ function seed() {
       { id: 's-l3', type: 'quiz', title: 'Scenarios', drawCount: 5, passMark: 80, maxAttempts: 3, questions: mkQs(leaderQs) },
     ],
   };
-  [essentials, leaders].forEach(p => { p.steps.forEach(s => s.rev = stepRev(s)); p.updatedAt = now(); p.versions = [{ version: 1, at: now(), note: 'First published', by: 'Admin' }]; });
+  [essentials, leaders].forEach(p => { p.steps.forEach(s => s.rev = stepRev(s)); p.updatedAt = now(); p.versions = [{ version: 1, label: '1.0', kind: 'major', at: now(), note: 'First published', by: 'Admin' }]; });
 
   const events = [
     { id: 'ev-p7', name: 'P7 Camp — Summer 2027', date: '2027-07-05', endDate: '2027-07-09', location: 'Castlewellan', requiredPathways: ['p-essentials', 'p-leaders'] },
@@ -805,7 +815,7 @@ function renderPlayer(person, pathway, stepParam) {
   app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me">${ICON.back} My training</a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
     <aside id="paside">
-      <div class="eyebrow">Pathway · v${pathway.version}</div>
+      <div class="eyebrow">Pathway · ${vTag(pathway)}</div>
       <h2 class="ptitle">${esc(pathway.title)}</h2>
       <button class="stepmini" data-act="steps" aria-expanded="false" aria-controls="steplist">
         <span class="sm-dots">${steps.map((s, i) => `<i class="${s.type !== 'attest' && stepDone(pr, s) ? 'd' : ''} ${i === idx ? 'c' : ''}"></i>`).join('')}</span>
@@ -1254,7 +1264,7 @@ function renderCert(certId, viewer) {
         <div><b>Completed</b>${fmtDate(c.completedAt)}</div>
         <div><b>Valid until</b>${fmtDate(c.expiresAt)}</div>
         <div><b>Certificate ID</b>${esc(c.id)}</div>
-        <div><b>Course version</b>v${c.version}</div>
+        <div><b>Course version</b>${vTag(P(c.pathwayId), c.version)}</div>
         <div><b>${c.manual ? 'Recorded' : 'Signed as'}</b>${esc(c.manual ? c.manual.method.split(' (')[0] : c.attestationName)}</div>
         <div class="cert-tag">Light to live by</div>
       </div>

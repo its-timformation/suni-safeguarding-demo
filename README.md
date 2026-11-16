@@ -70,3 +70,11 @@ Checked with axe-core against WCAG 2.0–2.2 A/AA on every page and the main dia
 - labelled controls, and live announcements for page changes and toasts
 - an accessible video slider and an AA-contrast palette
 - respect for reduced-motion and increased-contrast settings
+
+## Pathway versions
+
+Versions are shown as **major.minor**: 1.0, 1.1, 1.2, then 2.0. When you publish, choose:
+- **Small update** (minor, e.g. 1.1): typos, clearer wording, extra or improved quiz questions.
+- **Major update** (major, e.g. 2.0): new or changed content; steps added, removed or reordered; a different video.
+
+The editor suggests one based on what changed. Records still keep a running version number underneath for reliable matching (`training_records.details.version`), plus `version_label` for display. Certificates always show the version they were earned on.

@@ -87,7 +87,7 @@ function renderOverview() {
       const rows = per.filter(r => r.req.includes(pw)); const c = Object.fromEntries(ST.map(([k]) => [k, 0]));
       rows.forEach(r => c[r.sts.find(x => x.pw === pw).st.key]++);
       return `<div class="card"><div class="row between"><h3>${esc(pw.title)}</h3><span class="small"><b>${rows.length ? Math.round((c.complete + c.due) / rows.length * 100) : 0}%</b> <span class="muted">of ${rows.length}</span></span></div>
-        <div class="tiny muted" style="margin:2px 0 10px">v${pw.version} · ${renewLabel(pw)}</div>
+        <div class="tiny muted" style="margin:2px 0 10px">${vTag(pw)} · ${renewLabel(pw)}</div>
         <div class="segbar">${ST.map(([k, l, col]) => c[k] ? `<a href="#/admin/people" data-pf='${JSON.stringify({ pathway: pw.id, status: k })}' style="flex:${c[k]};background:${col}" title="${c[k]} ${l}"></a>` : '').join('')}</div>
         <div class="seglegend">${ST.map(([k, l, col]) => `<a href="#/admin/people" data-pf='${JSON.stringify({ pathway: pw.id, status: k })}'><span class="sw" style="background:${col}"></span>${l} <b>${c[k]}</b></a>`).join('')}</div></div>`;
     }).join('')}</div>
@@ -146,7 +146,7 @@ function auditText(a) {
     case 'certificate_edited': return `Admin edited certificate <b>${esc(d.certId)}</b> for ${esc(d.name || who)} <span class="muted">· ${(d.changes || []).map(c => `${esc(c.field)} ${esc(c.from)} → ${esc(c.to)}`).join(', ')}</span>${d.reason ? `<br><span class="tiny muted">“${esc(d.reason)}”</span>` : ''}`;
     case 'certificate_revoked': case 'certificate_reinstated': return `Admin ${a.action === 'certificate_revoked' ? 'revoked' : 'reinstated'} certificate <b>${esc(d.certId)}</b> for ${esc(d.name || who)}${d.reason ? `<br><span class="tiny muted">“${esc(d.reason)}”</span>` : ''}`;
     case 'certificate_reissued': return `Admin reissued certificate ${esc(d.from)} as <b>${esc(d.to)}</b> for ${esc(d.name || who)}${d.reason ? `<br><span class="tiny muted">“${esc(d.reason)}”</span>` : ''}`;
-    case 'pathway_published': return `Admin published <b>${esc(pw)}</b> v${a.version}${d.note ? ` — “${esc(d.note)}”` : ''}`;
+    case 'pathway_published': return `Admin published <b>${esc(pw)}</b> ${d.label ? 'v' + esc(d.label) : vTag(P(a.pathwayId), a.version)}${d.kind ? ` <span class="muted">(${d.kind} update)</span>` : ''}${d.note ? ` — “${esc(d.note)}”` : ''}`;
     case 'event_saved': case 'event_removed': return `Admin ${ACTION_LABEL[a.action]} <b>${esc(d.name)}</b>`;
     default: return who ? `<b>${esc(who)}</b> ${ACTION_LABEL[a.action] || a.action} <span class="muted">· ${esc(pw)}</span>` : `Admin ${ACTION_LABEL[a.action] || a.action}`;
   }
@@ -171,7 +171,7 @@ function exportRegister() {
   live().forEach(p => requiredPathwaysFor(p).forEach(pw => {
     const st = statusOf(p, pw); const c = st.c; const pr = prog(p.id, pw.id);
     const attempts = pw.steps.filter(s => s.type === 'quiz').reduce((n, s) => n + (pr.steps[s.id]?.attempts?.length || 0), 0);
-    rows.push([p.name, p.email, p.roles.join('; '), p.eventIds.map(id => EventById(id)?.name).join('; '), pw.title, st.key === 'due' ? 'Due soon' : st.label.replace(/ ·.*/, ''), c ? fmtDate(c.completedAt) : '', c ? fmtDate(c.expiresAt) : '', c ? 'v' + c.version : '', c?.score ?? '', attempts, c?.attestationName || '', c?.id || '']);
+    rows.push([p.name, p.email, p.roles.join('; '), p.eventIds.map(id => EventById(id)?.name).join('; '), pw.title, st.key === 'due' ? 'Due soon' : st.label.replace(/ ·.*/, ''), c ? fmtDate(c.completedAt) : '', c ? fmtDate(c.expiresAt) : '', c ? vTag(pw, c.version) : '', c?.score ?? '', attempts, c?.attestationName || '', c?.id || '']);
   }));
   download(`SUNI-safeguarding-register-${stamp()}.csv`, csv(rows)); toast('Register downloaded');
 }
@@ -423,10 +423,10 @@ function printRecord(p) {
     </div>
     <h2>Required training</h2>
     <table class="pd-table"><thead><tr><th>Pathway</th><th>Status</th><th>Completed</th><th>Valid until</th><th>Version</th><th>Score</th><th>Certificate</th></tr></thead><tbody>
-      ${req.map(pw => { const st = statusOf(p, pw), c = st.c; return `<tr><td><b>${esc(pw.title)}</b></td><td>${pdChip(st)}</td><td>${c ? fmtDate(c.completedAt) : '—'}</td><td>${c ? fmtDate(c.expiresAt) : '—'}</td><td>${c ? 'v' + c.version : '—'}</td><td>${c?.score != null ? c.score + '%' : c?.manual ? 'Recorded' : '—'}</td><td class="mono">${c ? esc(c.id) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="7">No training assigned</td></tr>'}
+      ${req.map(pw => { const st = statusOf(p, pw), c = st.c; return `<tr><td><b>${esc(pw.title)}</b></td><td>${pdChip(st)}</td><td>${c ? fmtDate(c.completedAt) : '—'}</td><td>${c ? fmtDate(c.expiresAt) : '—'}</td><td>${c ? vTag(pw, c.version) : '—'}</td><td>${c?.score != null ? c.score + '%' : c?.manual ? 'Recorded' : '—'}</td><td class="mono">${c ? esc(c.id) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="7">No training assigned</td></tr>'}
     </tbody></table>
     ${certs.length ? `<h2>Certificate history</h2><table class="pd-table"><thead><tr><th>Certificate</th><th>Pathway</th><th>Completed</th><th>Expiry</th><th>How</th><th>Status</th></tr></thead><tbody>
-      ${certs.map(c => `<tr><td class="mono">${esc(c.id)}</td><td>${esc(c.pathwayTitle)} v${c.version}</td><td>${fmtDate(c.completedAt)}</td><td>${fmtDate(c.expiresAt)}</td><td>${c.manual ? esc(c.manual.method) : `Online · signed “${esc(c.attestationName)}”`}</td><td>${c.revoked ? (c.revoked.replacedBy ? 'Replaced' : 'Revoked') + ` — ${esc(c.revoked.reason)}` : new Date(c.expiresAt) > new Date() ? 'Valid' : 'Expired'}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${certs.map(c => `<tr><td class="mono">${esc(c.id)}</td><td>${esc(c.pathwayTitle)} ${vTag(P(c.pathwayId), c.version)}</td><td>${fmtDate(c.completedAt)}</td><td>${fmtDate(c.expiresAt)}</td><td>${c.manual ? esc(c.manual.method) : `Online · signed “${esc(c.attestationName)}”`}</td><td>${c.revoked ? (c.revoked.replacedBy ? 'Replaced' : 'Revoked') + ` — ${esc(c.revoked.reason)}` : new Date(c.expiresAt) > new Date() ? 'Valid' : 'Expired'}</td></tr>`).join('')}</tbody></table>` : ''}
     ${atts.length ? `<h2>Quiz attempts</h2><table class="pd-table"><thead><tr><th>Date</th><th>Pathway</th><th>Score</th><th>Result</th><th>Questions missed</th></tr></thead><tbody>
       ${atts.map(x => `<tr><td>${fmtDT(x.a.at)}</td><td>${esc(x.pw.title)}</td><td>${x.a.score}%</td><td>${x.a.passed ? 'Pass' : x.a.voided ? 'Not passed (reset)' : 'Not passed'}</td><td class="small">${(x.a.questions || []).filter(q => !q.correct).map(q => esc(q.text)).join('<br>') || '—'}</td></tr>`).join('')}</tbody></table>` : ''}
     ${p.notes ? `<h2>Internal notes</h2><div class="pd-note">${esc(p.notes).replace(/\n/g, '<br>')}</div>` : ''}
@@ -497,7 +497,7 @@ function resetTraining(p, pw) {
 }
 function editCert(c) {
   const p = Person(c.personId);
-  changeModal({ title: `Edit certificate ${esc(c.id)}`, intro: `${esc(p?.name || '')} · ${esc(c.pathwayTitle)} v${c.version}, completed ${fmtDate(c.completedAt)}.`,
+  changeModal({ title: `Edit certificate ${esc(c.id)}`, intro: `${esc(p?.name || '')} · ${esc(c.pathwayTitle)} ${vTag(P(c.pathwayId), c.version)}, completed ${fmtDate(c.completedAt)}.`,
     fields: `<div class="grid g2"><div class="field"><label class="f">Valid until</label><input class="input" type="date" id="ec-exp" value="${isoDate(c.expiresAt)}" min="${isoDate(c.completedAt)}"></div>
       <div class="field"><label class="f">Name shown on certificate</label><input class="input" id="ec-name" value="${esc(c.nameOnCert || p?.name || '')}"></div></div>
       <div class="help" style="margin:-6px 0 14px">Changing the completion date or quiz score isn’t allowed — reset the training or record a new completion instead.</div>`,
@@ -658,7 +658,7 @@ function renderPersonRecord(id) {
           ${st.c ? (() => { const c = st.c, exp = new Date(c.expiresAt), start = new Date(c.completedAt), never = c.expiresAt.startsWith('9999');
             const left = never ? 1 : Math.max(0, Math.min(1, (exp - Date.now()) / (exp - start))); const months = Math.round((exp - Date.now()) / (30.44 * DAY));
             const col = st.key === 'expired' || left <= 0 ? 'var(--red-600)' : st.key === 'due' ? '#8A5508' : 'var(--teal)';
-            return `<div class="tfacts"><div><span>Completed</span><b>${fmtDate(c.completedAt)}</b></div><div><span>${exp > new Date() ? 'Valid until' : 'Expired'}</span><b style="color:${col}">${fmtDate(c.expiresAt)}</b></div><div><span>${c.manual ? 'Recorded' : 'Score'}</span><b>${c.manual ? 'By admin' : c.score != null ? c.score + '%' : '—'}</b></div><div><span>Version</span><b>v${c.version}${c.version < pw.version ? ` <em class="tiny" style="color:#8A5508;font-style:normal">(now v${pw.version})</em>` : ''}</b></div></div>
+            return `<div class="tfacts"><div><span>Completed</span><b>${fmtDate(c.completedAt)}</b></div><div><span>${exp > new Date() ? 'Valid until' : 'Expired'}</span><b style="color:${col}">${fmtDate(c.expiresAt)}</b></div><div><span>${c.manual ? 'Recorded' : 'Score'}</span><b>${c.manual ? 'By admin' : c.score != null ? c.score + '%' : '—'}</b></div><div><span>Version</span><b>${vTag(pw, c.version)}${c.version < pw.version ? ` <em class="tiny" style="color:#8A5508;font-style:normal">(now ${vTag(pw)})</em>` : ''}</b></div></div>
               ${never ? '' : `<div class="tlife"><i style="width:${left * 100}%;background:${col}"></i></div><div class="tiny muted" style="margin-top:4px">${exp > new Date() ? (months >= 1 ? `${months} month${months === 1 ? '' : 's'} left` : `${Math.max(0, Math.ceil((exp - Date.now()) / DAY))} days left`) : `Expired ${Math.round((Date.now() - exp) / (30.44 * DAY))} months ago`}</div>`}`; })() : `<div class="small muted" style="margin:6px 0 4px">Not completed yet · current version v${pw.version}</div>`}
           ${(() => { const renewing = pw.steps.some(s => stepDone(pr, s) || (pr.steps[s.id]?.attempts || []).length); const cyc = st.c && !renewing;
             const tick = `<span class="tk on">${ICON.check.replace('<svg', '<svg width="13" height="13"')}</span>`;
@@ -691,7 +691,7 @@ function renderPersonRecord(id) {
     },
     certs: () => certs.length ? `<div class="stack">${certs.map(c => { const valid = !c.revoked && new Date(c.expiresAt) > new Date();
       return `<div class="card certrow ${c.revoked ? 'revoked' : ''}"><div class="row between" style="align-items:flex-start">
-        <div><div class="row" style="gap:8px"><b>${esc(c.pathwayTitle)}</b><span class="tag">v${c.version}</span>${c.revoked ? `<span class="chip st-expired">${c.revoked.replacedBy ? 'Replaced' : 'Revoked'}</span>` : valid ? '<span class="chip st-complete">Valid</span>' : '<span class="chip st-due">Expired</span>'}${c.manual ? '<span class="tag" style="background:var(--sky-50)">Recorded by admin</span>' : ''}</div>
+        <div><div class="row" style="gap:8px"><b>${esc(c.pathwayTitle)}</b><span class="tag">${vTag(P(c.pathwayId), c.version)}</span>${c.revoked ? `<span class="chip st-expired">${c.revoked.replacedBy ? 'Replaced' : 'Revoked'}</span>` : valid ? '<span class="chip st-complete">Valid</span>' : '<span class="chip st-due">Expired</span>'}${c.manual ? '<span class="tag" style="background:var(--sky-50)">Recorded by admin</span>' : ''}</div>
         <div class="small muted" style="margin-top:4px">${esc(c.id)} · completed ${fmtDate(c.completedAt)} · ${valid ? 'valid until' : 'expiry'} ${fmtDate(c.expiresAt)}${c.score != null ? ` · ${c.score}%` : ''}${c.manual ? ` · ${esc(c.manual.method)}` : ` · signed as “${esc(c.attestationName)}”`}${c.nameOnCert ? ` · name on certificate: ${esc(c.nameOnCert)}` : ''}</div>
         ${c.revoked ? `<div class="tiny" style="margin-top:4px;color:var(--red-600)">${c.revoked.replacedBy ? 'Replaced' : 'Revoked'} ${fmtDate(c.revoked.at)} by ${esc(c.revoked.by)} — “${esc(c.revoked.reason)}”</div>` : ''}
         ${(c.edits || []).length ? `<details class="tiny" style="margin-top:6px"><summary class="muted" style="cursor:pointer">${plural(c.edits.length, 'change')}</summary>${c.edits.map(e => `<div style="margin-top:4px">${fmtDT(e.at)} · ${esc(e.by)}: ${e.changes.map(ch => `${esc(ch.field)} ${esc(ch.from)} → ${esc(ch.to)}`).join(', ')} — “${esc(e.reason)}”</div>`).join('')}</details>` : ''}</div>
@@ -851,7 +851,7 @@ function renderPathways() {
       const assigned = live().filter(p => requiredPathwaysFor(p).includes(pw));
       const done = assigned.filter(p => ['complete', 'due'].includes(statusOf(p, pw).key)).length;
       return `<a class="card pcard" href="#/admin/pathways/${pw.id}" style="color:inherit;text-decoration:none;display:block">
-        <div class="row between"><span class="tag" style="background:${pw.colour}1a;color:color-mix(in srgb,${pw.colour} 70%,#000)">v${pw.version}</span>${pw.active === false ? '<span class="chip st-none">Hidden</span>' : ''}</div>
+        <div class="row between"><span class="tag" style="background:${pw.colour}1a;color:color-mix(in srgb,${pw.colour} 70%,#000)">${vTag(pw)}</span>${pw.active === false ? '<span class="chip st-none">Hidden</span>' : ''}</div>
         <h3 style="margin:10px 0 6px">${esc(pw.title)}</h3><p class="small muted">${esc(pw.summary)}</p>
         <div class="row" style="gap:6px;margin:10px 0">${pw.steps.map(s => `<span class="ico ${s.type}" title="${esc(s.title)}" style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center">${ICON[s.type].replace('<svg', '<svg width="15" height="15"')}</span>`).join('')}<span class="ico attest" style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center">${ICON.attest.replace('<svg', '<svg width="15" height="15"')}</span></div>
         <div class="tiny muted">${renewLabel(pw).replace(/^./, c => c.toUpperCase())} · Required for ${esc(pw.requiredForRoles.join(', ') || 'events only')} · ${done}/${assigned.length} complete</div></a>`;
@@ -873,8 +873,8 @@ function renderPathwayEditor(id) {
   const stepSummary = s => s.type === 'video' ? (s.video?.source === 'file' ? `Uploaded file · ${esc(s.video.fileName || '')}` : `${s.video?.source === 'youtube' ? 'YouTube' : 'Vimeo'} · ${esc(s.video?.url || '')}`)
     : s.type === 'quiz' ? `${s.questions.length} questions in bank · ${s.drawCount} drawn · pass ${s.passMark}% · ${s.lock === false ? 'unlimited attempts' : `locks after ${s.maxAttempts} fails`}${s.questions.length < s.drawCount * 2 ? ' · <span style="color:#8A5508">tip: add more questions so retakes feel fresh</span>' : ''}`
       : `${(s.body || '').split(/\s+/).length} words${s.link?.url ? ' · links to a document' : ''}`;
-  adminShell('pathways', pageHead(`<a href="#/admin/pathways">Pathways</a> / Edit`, esc(draft.title), `Live version: <b>v${live.version}</b>${live.version ? ` · published ${fmtDate(live.updatedAt)}` : ' · not published yet'}`,
-    `<a class="btn ghost sm" href="#/admin/pathways" id="cancel">Close</a><button class="btn red sm" id="pub" ${changed() ? '' : 'disabled'}>Publish v${live.version + 1}</button>`) + `
+  adminShell('pathways', pageHead(`<a href="#/admin/pathways">Pathways</a> / Edit`, esc(draft.title), `Live version: <b>${vTag(live)}</b>${live.version ? ` · published ${fmtDate(live.updatedAt)}` : ' · not published yet'}`,
+    `<a class="btn ghost sm" href="#/admin/pathways" id="cancel">Close</a><button class="btn red sm" id="pub" ${changed() ? '' : 'disabled'}>Publish…</button>`) + `
     ${changed() ? `<div class="notice warn small" style="margin-bottom:16px">${ICON.info}<div><b>Unpublished changes.</b> Volunteers see the live version until you publish. Anyone partway through keeps the steps they’ve already done if those steps haven’t changed.</div></div>` : ''}
     <div class="pwtabs seg" role="tablist" aria-label="Pathway editor sections">${[['steps', `Steps <span>${draft.steps.length + 1}</span>`], ['settings', 'Settings'], ['history', 'History']].map(([k, l]) => `<button role="tab" data-pwt="${k}" aria-selected="${pwTab === k}" class="${pwTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div class="pwgrid" data-tab="${pwTab}">
@@ -905,12 +905,12 @@ function renderPathwayEditor(id) {
       </section>
     </div>
     <section class="pw-history" data-tab="${pwTab}"><h2 class="pw-h" style="margin:28px 0 10px">Version history</h2>
-    <div class="card">${(live.versions || []).length ? `<ul class="timeline">${live.versions.slice().reverse().map(v => `<li><span class="when">${fmtDT(v.at)}</span><span><b>v${v.version}</b> — ${esc(v.note || '')} <span class="muted">· ${esc(v.by || '')}</span></span></li>`).join('')}</ul>` : '<div class="empty">Not published yet</div>'}</div></section>
-    ${changed() ? `<div class="pwbar" role="region" aria-label="Unpublished changes"><span><b>Unpublished changes</b><br><span class="tiny">Volunteers still see v${live.version}</span></span><button class="btn red" id="pub2">Publish v${live.version + 1}</button></div>` : ''}`);
+    <div class="card">${(live.versions || []).length ? `<ul class="timeline">${live.versions.slice().reverse().map(v => `<li><span class="when">${fmtDT(v.at)}</span><span><b>v${esc(v.label || v.version + '.0')}</b>${v.kind ? ` <span class="tag" style="font-size:11px">${v.kind === 'major' ? 'Major' : 'Minor'}</span>` : ''} — ${esc(v.note || '')} <span class="muted">· ${esc(v.by || '')}</span></span></li>`).join('')}</ul>` : '<div class="empty">Not published yet</div>'}</div></section>
+    ${changed() ? `<div class="pwbar" role="region" aria-label="Unpublished changes"><span><b>Unpublished changes</b><br><span class="tiny">Volunteers still see ${vTag(live)}</span></span><button class="btn red" id="pub2">Publish…</button></div>` : ''}`);
 
   const refresh = () => renderPathwayEditor(id);
   const syncPub = () => { const c = changed(); $('#pub').disabled = !c; const bar = $('.pwbar');
-    if (c && !bar) { app().insertAdjacentHTML('beforeend', `<div class="pwbar" role="region" aria-label="Unpublished changes"><span><b>Unpublished changes</b><br><span class="tiny">Volunteers still see v${live.version}</span></span><button class="btn red" id="pub2">Publish v${live.version + 1}</button></div>`); $('#pub2').onclick = () => $('#pub').click(); }
+    if (c && !bar) { app().insertAdjacentHTML('beforeend', `<div class="pwbar" role="region" aria-label="Unpublished changes"><span><b>Unpublished changes</b><br><span class="tiny">Volunteers still see ${vTag(live)}</span></span><button class="btn red" id="pub2">Publish…</button></div>`); $('#pub2').onclick = () => $('#pub').click(); }
     else if (!c && bar) bar.remove(); };
   $$('[data-pwt]').forEach(b => b.onclick = () => { pwTab = b.dataset.pwt; $$('[data-pwt]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); }); $$('.pwgrid,.pw-history').forEach(x => x.dataset.tab = pwTab); });
   $('#pub2') && ($('#pub2').onclick = () => $('#pub').click());
@@ -939,21 +939,30 @@ function renderPathwayEditor(id) {
   });
   $('#cancel').onclick = e => { if (changed() && !confirmInline(e.currentTarget, 'Discard changes?')) { e.preventDefault(); return; } draft = null; };
   $('#pub').onclick = () => {
-    const s = modal(`<header><h2>Publish v${live.version + 1}</h2><button class="iconbtn" data-close>${ICON.x}</button></header>
-      <div class="body"><div class="field"><label class="f">What changed?</label><input class="input" id="note" placeholder="e.g. Added two scenario questions"><div class="help">Kept in the version history and audit log.</div></div>
-      <div class="notice info small">${ICON.info}<div>Existing certificates stay valid and keep their version number. New completions will show v${live.version + 1}.</div></div></div>
-      <footer><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="pubgo">Publish</button></footer>`);
+    // suggest major when steps were added, removed, reordered or a video changed; minor otherwise
+    const sig = p => p.steps.map(st => st.id + ':' + st.type + (st.type === 'video' ? JSON.stringify(st.video) : '')).join('|');
+    const suggest = !live.version || sig(draft) !== sig(live) ? 'major' : 'minor';
+    let kind = suggest;
+    const s = modal(`<header><div><div class="eyebrow">${esc(draft.title)}</div><h2 style="margin-top:4px">Publish a new version</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+      <div class="body"><fieldset class="vkind"><legend class="f">What kind of change is this?</legend>
+        ${[['minor', 'Small update', 'Typos, clearer wording, extra or improved quiz questions.'], ['major', 'Major update', 'New or changed content, steps added, removed or reordered, a different video.']].map(([k, l, d]) => `<label class="vopt"><input type="radio" name="vk" value="${k}" ${kind === k ? 'checked' : ''}><span><b>${l} <span class="vnum">v${nextLabel(live, k)}</span>${suggest === k ? ' <span class="tag" style="font-size:11px">Suggested</span>' : ''}</b><span class="small muted">${d}</span></span></label>`).join('')}
+      </fieldset>
+      <div class="field" style="margin-top:14px"><label class="f">What changed?</label><input class="input" id="note" placeholder="e.g. Added two scenario questions"><div class="help">Kept in the version history and audit log.</div></div>
+      <div class="notice info small">${ICON.info}<div>Existing certificates stay valid and keep the version they were earned on (for example v${verLabel(live)}). New completions will show <b id="vnew">v${nextLabel(live, kind)}</b>. Anyone partway through keeps the steps they’ve already done if those steps haven’t changed.</div></div></div>
+      <footer><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="pubgo">Publish v${nextLabel(live, kind)}</button></footer>`);
+    $$('[name=vk]', s).forEach(r => r.onchange = () => { kind = r.value; $('#vnew', s).textContent = 'v' + nextLabel(live, kind); $('#pubgo', s).textContent = 'Publish v' + nextLabel(live, kind); });
     $('#pubgo', s).onclick = () => {
       if (!draft.steps.length) { toast('Add at least one step'); return; }
       const bad = draft.steps.find(st => st.type === 'quiz' && st.questions.length < st.drawCount);
       if (bad) { toast(`“${bad.title}” needs at least ${bad.drawCount} questions`); return; }
       draft.steps.forEach(st => st.rev = stepRev(st));
       const note = $('#note', s).value.trim() || 'Updated';
+      const label = nextLabel(live, kind);
       draft.version = live.version + 1; draft.updatedAt = now();
-      draft.versions = [...(live.versions || []), { version: draft.version, at: now(), note, by: db.settings.adminName }];
+      draft.versions = [...(live.versions || []), { version: draft.version, label, kind, at: now(), note, by: db.settings.adminName }];
       Object.keys(live).forEach(k => delete live[k]); Object.assign(live, JSON.parse(JSON.stringify(draft)));
-      audit({ actor: 'admin', action: 'pathway_published', pathwayId: live.id, version: live.version, detail: { note, snapshot: live.steps.map(st => ({ id: st.id, type: st.type, title: st.title, rev: st.rev })) } });
-      closeModal(); draft = null; toast(`Published v${live.version}`); renderPathwayEditor(id);
+      audit({ actor: 'admin', action: 'pathway_published', pathwayId: live.id, version: live.version, detail: { note, label, kind, snapshot: live.steps.map(st => ({ id: st.id, type: st.type, title: st.title, rev: st.rev })) } });
+      closeModal(); draft = null; toast(`Published v${verLabel(live)}`); renderPathwayEditor(id);
     };
   };
 }
