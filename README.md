@@ -84,3 +84,16 @@ The editor suggests one based on what changed. Records still keep a running vers
 Reading steps use a rich-text editor (headings, bold, italic, bulleted and numbered lists, links). Content pasted from Word or Google Docs is cleaned to that allow-list, so scripts, styles and unsafe links are removed. It's stored as sanitised HTML (`format: 'html'`). Older Markdown content still displays and converts automatically the first time it's edited.
 
 Certificates show the course, person and dates. The course version appears on the scan-to-verify page and in records and exports, not on the certificate itself.
+
+## Rollout and email allowance
+
+**Emails → Roll out to everyone in daily batches** plans the launch:
+- choose who to invite (everyone not yet invited, volunteers, staff or one event team) and who goes first
+- choose the email plan, invites per day and start date
+- see a forecast that compares the free plan with one month of Pro
+
+SUNI's choice is **Resend Pro for the first month ($20), then the free plan**. Pro sends up to 400 invites a day so the help inbox isn't swamped, and drops back to the free plan automatically after 30 days. Remember to cancel Pro in Resend.
+
+On the free plan (100 emails a day, including sign-in links), bulk sends keep 40 a day in reserve for sign-in links and reminders. Anything that doesn't fit today is held and goes out at 9am the next day, so the limit is never exceeded. The daily job sends each batch; in the demo, "Simulate the next sending day" fast-forwards.
+
+New volunteers see a short welcome the first time they sign in: what to expect, how long it takes, and how to sign in next time.

@@ -960,6 +960,37 @@ p{line-height:1.6}
   .tb-acts .person b{display:none}
 }
 @media(max-width:400px){.brand-lbl b{font-size:14.5px!important}}
+
+/* email allowance + rollout */
+.allow{background:var(--card,#fff);border-radius:16px;box-shadow:var(--sh-1);padding:14px 18px;margin-bottom:16px}
+.allow.pro{font-size:14.5px}
+.allow-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:14.5px}
+.allow-bar{position:relative;height:10px;border-radius:9px;background:#EFEAE4;overflow:visible}
+.allow-bar i{position:absolute;inset:0 auto 0 0;background:var(--teal);border-radius:9px}
+.allow-bar span{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.rocard{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px;text-decoration:none;color:inherit;border:1.5px solid transparent}
+.rocard:hover{border-color:var(--red);text-decoration:none}.rocard>div{display:grid;gap:2px}.rocard svg{color:var(--red-600);flex:none}
+.rogrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+.ro-h{font-size:20px;margin:0 0 14px}
+.ro-order{border:0;padding:0;margin:0 0 16px;display:grid;gap:6px}.ro-order legend{padding:0;margin-bottom:8px}
+fieldset.field{border:0;padding:0;margin:0 0 16px}fieldset.field legend{padding:0;margin-bottom:8px}
+.ro-big{display:grid;gap:2px;margin-bottom:16px}.ro-big b{font-size:30px;font-weight:800;letter-spacing:-.02em}.ro-big span{color:var(--muted)}
+.ro-compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.ro-compare>div{border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;display:grid;gap:2px}.ro-compare>div.on{border-color:var(--red);background:#FFFBFA}
+.ro-compare b{font-size:22px;font-weight:800}
+.rochart{width:100%;height:auto;display:block;color:var(--ink)}
+.rolegend{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-top:6px}.rolegend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.ro-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0}
+@media(max-width:900px){.rogrid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:620px){.ro-compare{grid-template-columns:1fr}.ro-actions .btn{flex:1 1 auto}}
+
+.welcome{margin-bottom:22px;border:1.5px solid var(--teal);background:linear-gradient(var(--teal-50),#fff 60%)}
+.wl-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.wl-head h2{font-size:22px;margin:0 0 8px}
+.wl-steps{list-style:none;padding:0;margin:14px 0 18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;counter-reset:s}
+.wl-steps li{background:#fff;border-radius:14px;padding:14px 16px;display:grid;gap:4px;counter-increment:s;box-shadow:var(--sh-1)}
+.wl-steps li b::before{content:counter(s) ". ";color:var(--teal)}
+.wl-steps span{font-size:14.5px;color:var(--ink-2);line-height:1.5}
+@media(max-width:700px){.wl-steps{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -4033,8 +4064,15 @@ function renderLearnerHome(person) {
   const done = req.filter(p => statusOf(person, p).key === 'complete').length;
   const refreshN = req.filter(p => refreshInfo(person, p, statusOf(person, p))).length;
   const allDone = req.length && done === req.length;
+  // welcome only people who haven't started anything yet
+  const firstVisit = !(db.welcomed ||= {})[person.id] && !db.completions.some(c => c.personId === person.id) && !Object.values(db.progress[person.id] || {}).some(pr => Object.keys(pr.steps || {}).length) && requiredPathwaysFor(person).length > 0;
   app().innerHTML = topbar(`<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein">
+    ${firstVisit ? `<section class="welcome card" aria-labelledby="wl-h"><div class="wl-head"><h2 id="wl-h">Welcome to SUNI safeguarding training</h2><button class="iconbtn" id="wl-x" aria-label="Close welcome">${ICON.x}</button></div>
+      <p>Thanks for serving with us. Here's what to expect:</p>
+      <ol class="wl-steps"><li><b>Watch</b><span>a short video, at your own pace. You can pause and come back.</span></li><li><b>Check</b><span>a 5-question quiz. You need 80%, and you can try again.</span></li><li><b>Sign off</b><span>read our guidance and confirm you'll follow it. Your certificate appears straight away.</span></li></ol>
+      <p class="small muted" style="margin:0">About ${Math.max(10, req.length * 15)} minutes in total. Next time, just enter your email on the sign-in page and we'll send you a link. Questions? Reply to any of our emails or contact ${esc(db.settings.dsoName || 'our safeguarding team')}.</p>
+      <div class="row" style="gap:8px;margin-top:16px"><a class="btn red" href="#/me/p/${req.find(pw => statusOf(person, pw).key === 'none')?.id}">Start my training ${ICON.arrow}</a><button class="btn ghost" id="wl-later">I'll look around first</button></div></section>` : ''}
     <div class="hero" style="margin-bottom:26px">
       <div class="flamebg">${FLAME(170)}</div>
       <h1 style="margin:8px 0 10px">${allDone ? `Thank you, ${esc(firstName(person.name))} — you’re all set.` : `Hi ${esc(firstName(person.name))}, thanks for serving with us.`}</h1>
@@ -4070,6 +4108,10 @@ function renderLearnerHome(person) {
     </div>
     ${person.eventIds.length === 0 && !req.length ? '' : `<p class="small muted" style="margin-top:22px">Your answers and completion are recorded so ${esc(db.settings.short)} can show that everyone serving has been trained. See the <a href="https://www.suni.co.uk" target="_blank" rel="noopener">Privacy Notice</a>.</p>`}
   </main>` + worriedFab() + demobar('learner');
+  const dismiss = () => { db.welcomed[person.id] = now(); persist(); };
+  $('#wl-x') && ($('#wl-x').onclick = () => { dismiss(); $('.welcome').remove(); });
+  $('#wl-later') && ($('#wl-later').onclick = () => { dismiss(); $('.welcome').remove(); });
+  $('.welcome .btn.red') && $('.welcome .btn.red').addEventListener('click', dismiss);
   $$('.pcard[data-href]').forEach(el => el.addEventListener('click', e => { if (!e.target.closest('a,button') && el.dataset.href) go(el.dataset.href); }));
 }
 
@@ -4664,6 +4706,7 @@ function adminRoute(parts) {
   if (sec === 'events') return renderEvents();
   if (sec === 'pathways' && id) return renderPathwayEditor(id);
   if (sec === 'pathways') return renderPathways();
+  if (sec === 'emails' && id === 'rollout') return renderRollout();
   if (sec === 'emails') return renderEmails();
   if (sec === 'audit') return renderAudit();
   if (sec === 'settings') return renderSettings();
@@ -4765,6 +4808,9 @@ function auditText(a) {
     case 'events_batch_added': return `Admin added <b>${d.count}</b> events <span class="muted">· ${esc((d.names || []).join(', '))}</span>`;
     case 'list_synced': return `Admin synced <b>${esc(d.list)}</b> from ${esc(d.file || 'a list')} <span class="muted">· ${[d.added && d.added + ' added', d.joined && d.joined + ' joined', d.updated && d.updated + ' updated', d.reactivated && d.reactivated + ' reactivated', d.archived && d.archived + ' archived', d.removed && d.removed + ' taken off the team', d.unchanged + ' unchanged'].filter(Boolean).join(', ')}</span>`;
     case 'list_sync_undone': return `Admin undid a list sync`;
+    case 'rollout_wave': return `Rollout batch sent <span class="muted">· ${d.count} invites${d.simulated ? ' (simulated day ' + esc(d.day) + ')' : ''} · ${d.left} to go · ${d.plan} plan</span>`;
+    case 'rollout_started': return `Admin started a rollout <span class="muted">· ${d.people} people from ${esc(d.start)}, ${d.perDay} a day on the ${d.plan} plan</span>`;
+    case 'rollout_paused': case 'rollout_resumed': case 'rollout_cancelled': return `Admin ${a.action.split('_')[1]} the rollout`;
     case 'volunteer_archived': return `Admin archived <b>${esc(d.name || who)}</b>${d.reason ? ` <span class="muted">· ${esc(d.reason)}</span>` : ''}`;
     case 'volunteer_reactivated': return `<b>${esc(d.name || who)}</b> reactivated <span class="muted">· ${esc(d.source || 'admin')} · ${d.records_kept} record${d.records_kept === 1 ? '' : 's'} kept${d.records_removed ? `, ${d.records_removed} over ${retentionYears()} years old removed` : ''}</span>`;
     case 'volunteer_deleted': return `${a.actor === 'system' ? 'Automatic cleanup' : 'Admin'} permanently deleted a volunteer <span class="muted">· ref ${esc(d.ref)} · ${d.records_deleted} records and ${d.audit_entries_deleted} audit entries erased · ${esc(d.reason || '')}</span>`;
@@ -5819,15 +5865,19 @@ function dueFor(rule) {
   // one email per person per rule run
   const seen = new Set(); return out.filter(x => !seen.has(x.p.id) && seen.add(x.p.id));
 }
-function sendEmails(items, { subject, body, source, ruleId = null }) {
-  db.outbox ||= []; const at = now();
+function sendEmails(items, { subject, body, source, ruleId = null, at = null, rollout = false }) {
+  db.outbox ||= []; at ||= now();
   items = items.filter(({ p }) => p && !p.archived);   // archived volunteers are never emailed
+  // stay inside the email plan's daily limit: what doesn't fit goes out tomorrow morning
+  if (!rollout && !proActive(dayISO(at))) { const room = allowanceLeft(dayISO(at), items.length > 1); if (items.length > room) { const later = items.slice(room); items = items.slice(0, room);
+    scheduleEmails(later, { subject, body, ruleId, source, at: tomorrow9(Date.parse(at)), label: `${subject} (rest of a send, held to stay within the free plan)` });
+    setTimeout(() => toast(`${later.length} email${later.length === 1 ? '' : 's'} held until tomorrow to stay within today's free allowance`), 400); } }
   items.forEach(({ p, ctx = {}, key }) => {
     const sj = mergeText(subject, p, ctx), bd = mergeText(body, p, ctx);
     db.outbox.push({ id: uid('m_'), at, to: p.email, personId: p.id, subject: sj, body: bd, source, ruleId, key: key || null, by: source === 'automatic' ? 'system' : db.settings.adminName });
     db.audit.push({ id: uid('a_'), at, personId: p.id, actor: source === 'automatic' ? 'system' : 'admin', action: 'email_sent', detail: { name: p.name, subject: sj, source, rule: ruleId && RULE(ruleId)?.name } });
   });
-  persist(); if (items.length) mailPop(db.outbox.slice(-items.length)); return items.length;
+  persist(); if (items.length && !rollout) mailPop(db.outbox.slice(-items.length)); return items.length;
 }
 /* demo: show sent emails in the browser */
 function mailPop(msgs) {
@@ -5945,6 +5995,8 @@ function renderEmails() {
   const totalDue = Object.values(due).reduce((n, l) => n + l.length, 0);
   adminShell('emails', pageHead('Emails', 'Emails & reminders', 'Automatic reminders go out on their own; you can also send one-off emails to anyone.',
     `<button class="btn ghost sm" id="ecomp">Write an email…</button><button class="btn ghost sm" id="esmart">Remind everyone who needs it…</button><button class="btn red sm" id="erun" ${totalDue ? '' : 'disabled'}>Send due automatic reminders (${totalDue})</button>`) + `
+    ${allowanceBar()}
+    <a class="card rocard" href="#/admin/emails/rollout"><div><b>${db.rollout?.status === 'running' ? `Rollout in progress · ${db.rollout.waves.reduce((n, w) => n + w.count, 0)} invited, ${db.rollout.queue.length} to go` : 'Launching? Roll out to everyone in daily batches'}</b><span class="small muted">${db.rollout?.status === 'running' ? 'See the batches and forecast' : 'Plan invites to fit the free email plan, or use a paid plan for just the first month'}</span></div>${ICON.arrow}</a>
     <div class="notice info small" style="margin-bottom:18px">${ICON.info}<div><b>Demo:</b> emails are recorded in the log below but not actually sent. In the live version, automatic reminders run every morning and send through an email service (e.g. Postmark or Resend).</div></div>
     ${(() => { const sch = [...(db.scheduled || [])].sort((a, b) => a.at.localeCompare(b.at)); const rel = db.events.filter(e => !isReleased(e)).sort((a, b) => (releaseDate(a) || '9').localeCompare(releaseDate(b) || '9'));
       return sch.length || rel.length ? `<h2 style="margin-bottom:12px">Coming up</h2><div class="card" style="margin-bottom:28px;padding:6px 18px">
@@ -6620,8 +6672,127 @@ function bindRichEditor(wrap) {
   area.addEventListener('keyup', state); area.addEventListener('mouseup', state); area.addEventListener('focus', state);
 }
 
+/* =====================================================================
+   EMAIL ALLOWANCE + ROLLOUT PLANNER
+   Free email plans cap sends per day (Resend free: 100/day, including
+   sign-in links). We never go over: bulk sends keep a reserve for sign-in
+   links and reminders, and anything that doesn't fit rolls to tomorrow.
+   ===================================================================== */
+// SUNI's choice: Resend Pro for the first month of the rollout, then the free plan (100 a day)
+const PLAN = () => (db.settings.emailPlan ||= { plan: 'pro', dailyCap: 100, reservePct: 40, proUntil: dayISO(Date.now() + 30 * DAY), proPerDay: 400 });
+const proActive = (day = todayISO()) => { const p = PLAN(); return p.plan === 'pro' && (!p.proUntil || day <= p.proUntil); };
+const dailyCap = day => proActive(day) ? Infinity : PLAN().dailyCap;
+const reserveCount = () => Math.round(PLAN().dailyCap * PLAN().reservePct / 100);
+function sentOn(day = todayISO()) { return db.audit.filter(a => (a.action === 'email_sent' || a.action === 'magic_link_sent') && dayISO(a.at) === day).length; }
+function allowanceLeft(day = todayISO(), bulk = true) { const c = dailyCap(day); if (c === Infinity) return Infinity; return Math.max(0, c - sentOn(day) - (bulk ? reserveCount() : 0)); }
+function allowanceBar() {
+  if (proActive()) return `<div class="allow pro"><b>Pro email plan</b> · no daily limit${PLAN().proUntil ? ` until ${fmtDate(PLAN().proUntil)}` : ''}</div>`;
+  const used = sentOn(), cap = PLAN().dailyCap, res = reserveCount();
+  return `<div class="allow" role="group" aria-label="Today's email allowance"><div class="allow-top"><b>Today: ${used} of ${cap} free emails used</b><span class="small muted">${res} kept for sign-in links and reminders</span></div>
+    <div class="allow-bar"><i style="width:${Math.min(100, used / cap * 100)}%"></i><span style="left:${(cap - res) / cap * 100}%" title="Bulk sends stop here"></span></div></div>`;
+}
+const tomorrow9 = (from = Date.now()) => { const d = new Date(from + DAY); d.setHours(9, 0, 0, 0); return d.toISOString(); };
+
+/* ---------- rollout ---------- */
+const RO = () => (db.rollout ||= { status: 'draft', scope: 'all', order: 'event', perDay: null, weekdaysOnly: true, start: todayISO(), waves: [], queue: [] });
+function alreadyInvited() { const s = new Set(); (db.outbox || []).forEach(m => { if (m.ruleId === 'r-assigned' || (m.key || '').startsWith('rollout|')) s.add(m.personId); }); db.audit.forEach(a => { if (a.action === 'login' && a.personId) s.add(a.personId); }); return s; }
+function soonestEvent(p) { const ds = p.eventIds.map(EventById).filter(e => e && isReleased(e)).map(e => e.date).sort(); return ds[0] || '9999-12-31'; }
+function rolloutCandidates(r = RO()) {
+  const done = alreadyInvited();
+  let list = live().filter(p => !done.has(p.id) && assignedCtx(p));
+  if (r.scope === 'staff') list = list.filter(p => typeOf(p) === 'staff'); else if (r.scope === 'volunteers') list = list.filter(p => typeOf(p) === 'volunteer'); else if (r.scope.startsWith('event:')) list = list.filter(p => p.eventIds.includes(r.scope.slice(6)));
+  const key = p => r.order === 'staff' ? (typeOf(p) === 'staff' ? '0' : '1') + soonestEvent(p) : r.order === 'event' ? soonestEvent(p) + p.last_name : p.last_name + p.first_name;
+  return list.sort((a, b) => key(a).localeCompare(key(b)));
+}
+const perDayFor = (r, plan) => plan === 'pro' ? (PLAN().proPerDay || 400) : Math.max(1, r.perDay || (PLAN().dailyCap - reserveCount()));
+function nextSendDay(from, weekdaysOnly) { const d = new Date(from + 'T12:00'); while (weekdaysOnly && [0, 6].includes(d.getDay())) d.setDate(d.getDate() + 1); return dayISO(d); }
+function forecast(n, perDay, start, weekdaysOnly) { const days = []; let d = nextSendDay(start, weekdaysOnly), left = n; while (left > 0 && days.length < 400) { const k = Math.min(perDay, left); days.push({ day: d, count: k }); left -= k; d = nextSendDay(dayISO(new Date(d + 'T12:00').getTime() + DAY), weekdaysOnly); } return days; }
+function sendWave(r, day, sim = false) {
+  if (r.waves.some(w => w.day === day)) return 0;
+  const plan = proActive(day) ? 'pro' : 'free';
+  const room = Math.min(perDayFor(r, plan), plan === 'pro' ? Infinity : allowanceLeft(day));
+  const ok = new Set(rolloutCandidates(r).map(p => p.id));
+  const take = []; while (r.queue.length && take.length < room) { const id = r.queue.shift(); if (ok.has(id)) take.push(id); }
+  if (!take.length) { if (!r.queue.length) r.status = 'done'; return 0; }
+  const rule = RULE('r-assigned'); const at = sim ? new Date(day + 'T09:00').toISOString() : undefined;
+  const n = sendEmails(take.map(id => { const p = Person(id); return { p, ctx: assignedCtx(p), key: 'rollout|' + id }; }), { subject: rule.subject, body: rule.body, source: 'automatic', ruleId: rule.id, at, rollout: true });
+  r.waves.push({ day, count: n, ids: take, simulated: sim });
+  audit({ actor: 'system', action: 'rollout_wave', detail: { day, count: n, left: r.queue.length, plan, simulated: sim } });
+  if (!r.queue.length) r.status = 'done';
+  persist(); return n;
+}
+function processRollout() { const r = db.rollout; if (!r || r.status !== 'running') return 0; const t = todayISO(); if (t < r.start || (r.weekdaysOnly && [0, 6].includes(new Date().getDay()))) return 0; return sendWave(r, t); }
+
+function renderRollout() {
+  const r = RO(); const running = ['running', 'paused', 'done'].includes(r.status);
+  const cands = running ? r.queue.length : rolloutCandidates(r).length;
+  const planNow = PLAN().plan === 'pro' ? 'pro' : 'free';
+  const fFree = forecast(cands, perDayFor(r, 'free'), r.start, r.weekdaysOnly), fPro = forecast(cands, perDayFor(r, 'pro'), r.start, r.weekdaysOnly);
+  // a month of Pro then free for the rest
+  const mixed = (() => { const out = []; let left = cands, d = nextSendDay(r.start, r.weekdaysOnly); const end = dayISO(new Date(r.start + 'T12:00').getTime() + 30 * DAY); while (left > 0 && out.length < 400) { const k = Math.min(d <= end ? perDayFor(r, 'pro') : perDayFor(r, 'free'), left); out.push({ day: d, count: k }); left -= k; d = nextSendDay(dayISO(new Date(d + 'T12:00').getTime() + DAY), r.weekdaysOnly); } return out; })();
+  const chosen = planNow === 'pro' ? mixed : fFree;
+  const sentTotal = r.waves.reduce((n, w) => n + w.count, 0), total = sentTotal + (running ? r.queue.length : cands);
+  const chart = (() => { const W = 560, H = 150, pad = 28, maxD = Math.max(fFree.length, 1), maxN = Math.max(cands, 1);
+    const pts = f => { let c = 0; return [[pad, H - pad], ...f.map((d, i) => { c += d.count; return [pad + (i + 1) / maxD * (W - pad - 10), H - pad - c / maxN * (H - pad - 14)]; })].map(p => p.map(v => v.toFixed(1)).join(',')).join(' '); };
+    return `<svg viewBox="0 0 ${W} ${H}" class="rochart" role="img" aria-label="Free plan takes ${fFree.length} sending days; one month of Pro takes ${mixed.length}">
+      <line x1="${pad}" y1="${H - pad}" x2="${W - 10}" y2="${H - pad}" stroke="currentColor" stroke-opacity=".25"/><line x1="${pad}" y1="14" x2="${W - 10}" y2="14" stroke="currentColor" stroke-opacity=".1" stroke-dasharray="3 3"/>
+      <text x="${pad}" y="10" font-size="11" fill="currentColor" opacity=".6">${cands.toLocaleString('en-GB')} invited</text><text x="${W - 10}" y="${H - 8}" font-size="11" text-anchor="end" fill="currentColor" opacity=".6">${fFree.length} sending days</text><text x="${pad}" y="${H - 8}" font-size="11" fill="currentColor" opacity=".6">day 1</text>
+      <polyline points="${pts(fFree)}" fill="none" stroke="var(--red)" stroke-width="2.5"/><polyline points="${pts(mixed)}" fill="none" stroke="var(--teal)" stroke-width="2.5"/></svg>
+      <div class="rolegend"><span><i style="background:var(--red)"></i>Free plan only</span><span><i style="background:var(--teal)"></i>Pro for the first month</span></div>`; })();
+  adminShell('emails', pageHead('Emails / Rollout', 'Roll out to volunteers', 'Invite people in daily batches that fit your email plan, so launching costs nothing — or use a paid plan for just the first month.',
+    `<a class="btn ghost sm" href="#/admin/emails" data-back="#/admin/emails">${ICON.back} Back</a>`) + `
+    ${allowanceBar()}
+    <div class="rogrid">
+      <section class="card ro-plan" aria-labelledby="ro-h1"><h2 id="ro-h1" class="ro-h">Plan</h2>
+        <div class="field"><label class="f" for="ro-scope">Who to invite</label><select class="input" id="ro-scope" ${running ? 'disabled' : ''}>${[['all', 'Everyone not yet invited'], ['volunteers', 'Volunteers only'], ['staff', 'Staff only'], ...db.events.filter(isReleased).map(e => ['event:' + e.id, `${e.name} team`])].map(([k, l]) => `<option value="${k}" ${r.scope === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+          <div class="help">${cands.toLocaleString('en-GB')} people · skips anyone already invited, archived, up to date, or waiting for an event's release date</div></div>
+        <fieldset class="field ro-order" ${running ? 'disabled' : ''}><legend class="f">Who goes first</legend>${[['event', 'Soonest event first'], ['staff', 'Staff first, then by event'], ['name', 'Alphabetical']].map(([k, l]) => `<label class="radiorow"><input type="radio" name="ro-order" value="${k}" ${r.order === k ? 'checked' : ''}><span>${l}</span></label>`).join('')}</fieldset>
+        <fieldset class="field"><legend class="f">Email plan</legend><div class="seg" role="radiogroup" aria-label="Email plan">${[['free', 'Free · $0'], ['pro', 'Pro for 1 month · $20']].map(([k, l]) => `<button type="button" role="radio" aria-checked="${planNow === k}" class="${planNow === k ? 'on' : ''}" data-plan="${k}">${l}</button>`).join('')}</div>
+          <div class="help">${planNow === 'pro' ? `<b>Recommended for launch.</b> Pro until ${fmtDate(PLAN().proUntil)}, sending up to ${perDayFor(r, 'pro')} a day so the help inbox isn't swamped. After that it drops back to the free plan automatically — remember to cancel Pro.` : `Free plan: ${PLAN().dailyCap} emails a day in total. ${reserveCount()} are kept each day for sign-in links and reminders.`}</div></fieldset>
+        <div class="grid g2"><div class="field"><label class="f" for="ro-per">Invites per day (free plan)</label><input class="input" type="number" min="1" max="${PLAN().dailyCap - reserveCount()}" id="ro-per" value="${perDayFor(r, 'free')}"><div class="help">Up to ${PLAN().dailyCap - reserveCount()}</div></div>
+          <div class="field"><label class="f" for="ro-start">Start</label><input class="input" type="date" id="ro-start" value="${r.start}" min="${todayISO()}" ${running ? 'disabled' : ''}></div></div>
+        <label class="row small" style="gap:10px;min-height:44px"><input type="checkbox" id="ro-wd" ${r.weekdaysOnly ? 'checked' : ''}> Weekdays only (fewer weekend questions to answer)</label>
+      </section>
+      <section class="card ro-fc" aria-labelledby="ro-h2"><h2 id="ro-h2" class="ro-h">Forecast</h2>
+        <div class="ro-big"><b>${chosen.length ? fmtDate(chosen.at(-1).day) : '—'}</b><span>${cands ? `everyone invited in ${chosen.length} sending day${chosen.length === 1 ? '' : 's'}` : 'No one left to invite'}</span></div>
+        <div class="ro-compare">
+          <div class="${planNow === 'free' ? 'on' : ''}"><span class="small muted">Free plan only</span><b>${fFree.length} days</b><span class="small">$0 · ${perDayFor(r, 'free')} a day</span></div>
+          <div class="${planNow === 'pro' ? 'on' : ''}"><span class="small muted">Pro for the first month</span><b>${mixed.length} days</b><span class="small">$20 once · up to ${perDayFor(r, 'pro')} a day</span></div>
+        </div>
+        ${cands ? chart : ''}
+        <p class="tiny muted" style="margin:10px 0 0">Each invite usually leads to a sign-in link a day or two later. The ${reserveCount()} kept back each day cover those, so the free limit is never hit.</p>
+      </section>
+    </div>
+    <div class="ro-actions">${r.status === 'draft' ? `<button class="btn red" id="ro-go" ${cands ? '' : 'disabled'}>Start rollout · ${cands.toLocaleString('en-GB')} people</button>` : r.status === 'running' ? `<button class="btn ghost" id="ro-pause">Pause</button><button class="btn red" id="ro-now">Send today's batch now</button>` : r.status === 'paused' ? `<button class="btn red" id="ro-resume">Resume</button>` : `<span class="chip st-complete"><span class="dot"></span>Rollout complete</span>`}
+      ${running ? `<button class="btn ghost" id="ro-reset">${r.status === 'done' ? 'Plan another rollout' : 'Cancel rollout'}</button>` : ''}
+      ${running && r.status !== 'done' ? `<span class="small muted">${sentTotal.toLocaleString('en-GB')} of ${total.toLocaleString('en-GB')} invited · the daily job sends the next batch each morning</span>` : ''}</div>
+    ${demoOn() && r.status === 'running' ? `<div class="demo-tools noprint"><span class="dt-lbl">Demo controls</span><button class="dt-btn" id="ro-sim">⏭ Simulate the next sending day</button><button class="dt-btn" id="ro-sim5">⏭ Simulate a week</button></div>` : ''}
+    <h2 class="ro-h" style="margin:28px 0 12px">Batches</h2>
+    <div class="tablewrap"><table><thead><tr><th>Day</th><th>Date</th><th>Invites</th><th>Status</th></tr></thead><tbody>
+      ${[...r.waves.map((w, i) => `<tr><td>${i + 1}</td><td>${fmtDate(w.day)}</td><td>${w.count}</td><td><span class="chip st-complete"><span class="dot"></span>Sent${w.simulated ? ' (simulated)' : ''}</span></td></tr>`),
+        ...(r.status === 'done' ? [] : (running ? forecast(r.queue.length, perDayFor(r, planNow), nextSendDay(r.waves.length ? dayISO(new Date(r.waves.at(-1).day + 'T12:00').getTime() + DAY) : r.start, r.weekdaysOnly), r.weekdaysOnly) : chosen).slice(0, 12).map((d, i) => `<tr><td>${r.waves.length + i + 1}</td><td>${fmtDate(d.day)}</td><td>${d.count}</td><td><span class="chip st-none"><span class="dot"></span>${running ? 'Scheduled' : 'Planned'}</span></td></tr>`))].join('') || '<tr><td colspan="4" class="empty">Nothing planned</td></tr>'}
+    </tbody></table></div>`);
+  const save = () => { persist(); renderRollout(); };
+  $('#ro-scope') && ($('#ro-scope').onchange = e => { r.scope = e.target.value; save(); });
+  $$('[name=ro-order]').forEach(i => i.onchange = () => { r.order = i.value; save(); });
+  $('#ro-per').onchange = e => { r.perDay = Math.max(1, Math.min(PLAN().dailyCap - reserveCount(), +e.target.value || 1)); save(); };
+  $('#ro-start') && ($('#ro-start').onchange = e => { r.start = e.target.value || todayISO(); if (PLAN().plan === 'pro') PLAN().proUntil = dayISO(new Date(r.start + 'T12:00').getTime() + 30 * DAY); save(); });
+  $('#ro-wd').onchange = e => { r.weekdaysOnly = e.target.checked; save(); };
+  $$('[data-plan]').forEach(b => b.onclick = () => { const p = PLAN(); p.plan = b.dataset.plan; p.proUntil = p.plan === 'pro' ? dayISO(new Date(r.start + 'T12:00').getTime() + 30 * DAY) : ''; audit({ actor: 'admin', action: 'settings_saved', detail: { emailPlan: p.plan, proUntil: p.proUntil } }); save(); });
+  $('#ro-go') && ($('#ro-go').onclick = e => { if (!confirmInline(e.currentTarget, `Click again to start · first batch ${fmtDate(nextSendDay(r.start, r.weekdaysOnly))}`)) return;
+    r.queue = rolloutCandidates(r).map(p => p.id); r.status = 'running'; r.waves = []; r.startedAt = now();
+    audit({ actor: 'admin', action: 'rollout_started', detail: { people: r.queue.length, start: r.start, plan: PLAN().plan, perDay: perDayFor(r, PLAN().plan) } });
+    const n = r.start <= todayISO() ? processRollout() : 0; persist(); toast(n ? `Rollout started · ${n} invites sent today` : `Rollout scheduled · first batch ${fmtDate(nextSendDay(r.start, r.weekdaysOnly))}`); renderRollout(); });
+  $('#ro-pause') && ($('#ro-pause').onclick = () => { r.status = 'paused'; audit({ actor: 'admin', action: 'rollout_paused', detail: {} }); save(); });
+  $('#ro-resume') && ($('#ro-resume').onclick = () => { r.status = 'running'; audit({ actor: 'admin', action: 'rollout_resumed', detail: {} }); save(); });
+  $('#ro-now') && ($('#ro-now').onclick = () => { const n = sendWave(r, todayISO()); toast(n ? `${n} invites sent` : r.waves.some(w => w.day === todayISO()) ? 'Today’s batch has already gone' : 'No room left in today’s free allowance'); renderRollout(); });
+  $('#ro-reset') && ($('#ro-reset').onclick = e => { if (r.status !== 'done' && !confirmInline(e.currentTarget, 'Click again to cancel')) return; audit({ actor: 'admin', action: 'rollout_cancelled', detail: { left: r.queue.length } }); db.rollout = null; persist(); renderRollout(); });
+  const sim = k => { let n = 0; for (let i = 0; i < k && r.status === 'running'; i++) { const last = r.waves.length ? dayISO(new Date(r.waves.at(-1).day + 'T12:00').getTime() + DAY) : r.start; n += sendWave(r, nextSendDay(last, r.weekdaysOnly), true); } toast(`${n} invites sent across ${k} simulated day${k === 1 ? '' : 's'}`); renderRollout(); };
+  $('#ro-sim') && ($('#ro-sim').onclick = () => sim(1)); $('#ro-sim5') && ($('#ro-sim5').onclick = () => sim(5));
+}
+
 /* ---------- background jobs (demo: run while the app is open) ---------- */
-function backgroundJobs() { const a = processScheduled(), b = processReleases(); if (a || b) { persist(); if (location.hash.startsWith('#/admin')) route(); } }
+function backgroundJobs() { const a = processScheduled(), b = processReleases() + processRollout(); if (a || b) { persist(); if (location.hash.startsWith('#/admin')) route(); } }
 
 const DEMO_RELEASE = { 'ev-ballycastle': { mode: 'before', weeks: 8 }, 'ev-beach': { mode: 'date', date: '2027-03-01' }, 'ev-teen': { mode: 'manual' } };
 /* ---------- boot ---------- */
@@ -6629,7 +6800,7 @@ db = Store.load();
 if (!db || db.schema !== 1) seed();
 db.scheduled ||= [];
 db.events.forEach(e => { if (!e.release) e.release = DEMO_RELEASE[e.id] || { mode: 'now' }; });
-dailyCleanup(); processScheduled(); processReleases();
+dailyCleanup(); processScheduled(); processReleases(); processRollout();
 setInterval(() => { if ($('#scrim') || $('#drawer')) { processScheduled(); processReleases(); persist(); return; } backgroundJobs(); }, 30000);
 addEventListener('hashchange', route);
 route();

@@ -763,8 +763,15 @@ function renderLearnerHome(person) {
   const done = req.filter(p => statusOf(person, p).key === 'complete').length;
   const refreshN = req.filter(p => refreshInfo(person, p, statusOf(person, p))).length;
   const allDone = req.length && done === req.length;
+  // welcome only people who haven't started anything yet
+  const firstVisit = !(db.welcomed ||= {})[person.id] && !db.completions.some(c => c.personId === person.id) && !Object.values(db.progress[person.id] || {}).some(pr => Object.keys(pr.steps || {}).length) && requiredPathwaysFor(person).length > 0;
   app().innerHTML = topbar(`<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein">
+    ${firstVisit ? `<section class="welcome card" aria-labelledby="wl-h"><div class="wl-head"><h2 id="wl-h">Welcome to SUNI safeguarding training</h2><button class="iconbtn" id="wl-x" aria-label="Close welcome">${ICON.x}</button></div>
+      <p>Thanks for serving with us. Here's what to expect:</p>
+      <ol class="wl-steps"><li><b>Watch</b><span>a short video, at your own pace. You can pause and come back.</span></li><li><b>Check</b><span>a 5-question quiz. You need 80%, and you can try again.</span></li><li><b>Sign off</b><span>read our guidance and confirm you'll follow it. Your certificate appears straight away.</span></li></ol>
+      <p class="small muted" style="margin:0">About ${Math.max(10, req.length * 15)} minutes in total. Next time, just enter your email on the sign-in page and we'll send you a link. Questions? Reply to any of our emails or contact ${esc(db.settings.dsoName || 'our safeguarding team')}.</p>
+      <div class="row" style="gap:8px;margin-top:16px"><a class="btn red" href="#/me/p/${req.find(pw => statusOf(person, pw).key === 'none')?.id}">Start my training ${ICON.arrow}</a><button class="btn ghost" id="wl-later">I'll look around first</button></div></section>` : ''}
     <div class="hero" style="margin-bottom:26px">
       <div class="flamebg">${FLAME(170)}</div>
       <h1 style="margin:8px 0 10px">${allDone ? `Thank you, ${esc(firstName(person.name))} — you’re all set.` : `Hi ${esc(firstName(person.name))}, thanks for serving with us.`}</h1>
@@ -800,6 +807,10 @@ function renderLearnerHome(person) {
     </div>
     ${person.eventIds.length === 0 && !req.length ? '' : `<p class="small muted" style="margin-top:22px">Your answers and completion are recorded so ${esc(db.settings.short)} can show that everyone serving has been trained. See the <a href="https://www.suni.co.uk" target="_blank" rel="noopener">Privacy Notice</a>.</p>`}
   </main>` + worriedFab() + demobar('learner');
+  const dismiss = () => { db.welcomed[person.id] = now(); persist(); };
+  $('#wl-x') && ($('#wl-x').onclick = () => { dismiss(); $('.welcome').remove(); });
+  $('#wl-later') && ($('#wl-later').onclick = () => { dismiss(); $('.welcome').remove(); });
+  $('.welcome .btn.red') && $('.welcome .btn.red').addEventListener('click', dismiss);
   $$('.pcard[data-href]').forEach(el => el.addEventListener('click', e => { if (!e.target.closest('a,button') && el.dataset.href) go(el.dataset.href); }));
 }
 
