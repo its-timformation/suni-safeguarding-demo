@@ -864,6 +864,7 @@ function renderPathways() {
 
 /* ---------- pathway editor (draft → publish) ---------- */
 let draft = null;
+let pwTab = 'steps';
 function renderPathwayEditor(id) {
   const live = P(id); if (!live) return go('#/admin/pathways');
   if (!draft || draft.id !== id) draft = JSON.parse(JSON.stringify(live));
@@ -875,41 +876,48 @@ function renderPathwayEditor(id) {
   adminShell('pathways', pageHead(`<a href="#/admin/pathways">Pathways</a> / Edit`, esc(draft.title), `Live version: <b>v${live.version}</b>${live.version ? ` · published ${fmtDate(live.updatedAt)}` : ' · not published yet'}`,
     `<a class="btn ghost sm" href="#/admin/pathways" id="cancel">Close</a><button class="btn red sm" id="pub" ${changed() ? '' : 'disabled'}>Publish v${live.version + 1}</button>`) + `
     ${changed() ? `<div class="notice warn small" style="margin-bottom:16px">${ICON.info}<div><b>Unpublished changes.</b> Volunteers see the live version until you publish. Anyone partway through keeps the steps they’ve already done if those steps haven’t changed.</div></div>` : ''}
-    <div class="grid" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:22px;align-items:start">
-      <div>
-        <div class="row between" style="margin-bottom:12px"><h3>Steps</h3><span class="tiny muted">Drag to reorder</span></div>
-        <div class="stack" id="steplist">${draft.steps.map((s, i) => `<div class="steprow" draggable="true" data-i="${i}">
+    <div class="pwtabs seg" role="tablist" aria-label="Pathway editor sections">${[['steps', `Steps <span>${draft.steps.length + 1}</span>`], ['settings', 'Settings'], ['history', 'History']].map(([k, l]) => `<button role="tab" data-pwt="${k}" aria-selected="${pwTab === k}" class="${pwTab === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="pwgrid" data-tab="${pwTab}">
+      <section class="pw-steps" aria-labelledby="pwsteps-h">
+        <div class="row between" style="margin-bottom:12px"><h2 class="pw-h" id="pwsteps-h">Steps</h2><span class="tiny muted pw-hint">Drag or use the arrows to reorder · tap a step to edit</span></div>
+        <ol class="stack pwlist" id="steplist">${draft.steps.map((s, i) => `<li class="steprow" draggable="true" data-i="${i}">
           <span class="ico ${s.type}">${ICON[s.type]}</span>
-          <div style="flex:1;min-width:0"><div class="tiny muted" style="font-weight:700">${i + 1} · ${typeName[s.type]}</div><b>${esc(s.title)}</b><div class="tiny muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${stepSummary(s)}</div></div>
-          <button class="iconbtn" data-mv="${i},-1" title="Move up" ${i === 0 ? 'disabled' : ''}>${ICON.up}</button><button class="iconbtn" data-mv="${i},1" title="Move down" ${i === draft.steps.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
-          <button class="btn ghost xs" data-es="${i}">Edit</button></div>`).join('')}
-          <div class="steprow" style="cursor:default;background:#FBFAF8;box-shadow:none"><span class="ico attest">${ICON.attest}</span><div style="flex:1"><div class="tiny muted" style="font-weight:700">Always last · Attestation</div><b>Sign-off & certificate</b></div></div>
-        </div>
-        <div class="row" style="margin-top:14px"><span class="small muted">Add step:</span>
-          <button class="btn soft sm" data-add="video">${ICON.video.replace('<svg', '<svg width="16" height="16"')} Video</button>
-          <button class="btn soft sm" data-add="read">${ICON.read.replace('<svg', '<svg width="16" height="16"')} Reading</button>
-          <button class="btn soft sm" data-add="quiz">${ICON.quiz.replace('<svg', '<svg width="16" height="16"')} Quiz</button></div>
-      </div>
-      <div class="card">
+          <button type="button" class="sr-main" data-es="${i}"><span class="sr-k">${i + 1} · ${typeName[s.type]}</span><b class="sr-t">${esc(s.title)}</b><span class="sr-sum">${stepSummary(s)}</span></button>
+          <div class="sr-acts"><button class="iconbtn" data-mv="${i},-1" aria-label="Move ${esc(s.title)} up" ${i === 0 ? 'disabled' : ''}>${ICON.up}</button><button class="iconbtn" data-mv="${i},1" aria-label="Move ${esc(s.title)} down" ${i === draft.steps.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
+          <button class="btn ghost xs" data-es="${i}">Edit</button></div></li>`).join('')}
+          <li class="steprow fixed"><span class="ico attest">${ICON.attest}</span><div class="sr-main"><span class="sr-k">Always last · Attestation</span><b class="sr-t">Sign-off & certificate</b><span class="sr-sum">Volunteers confirm the statement in Settings, then get their certificate.</span></div></li>
+        </ol>
+        <div class="pwadd"><span class="small muted">Add a step</span><div class="pwadd-btns">
+          <button class="btn soft sm" data-add="video">${ICON.video.replace('<svg', '<svg width="18" height="18"')} Video</button>
+          <button class="btn soft sm" data-add="read">${ICON.read.replace('<svg', '<svg width="18" height="18"')} Reading</button>
+          <button class="btn soft sm" data-add="quiz">${ICON.quiz.replace('<svg', '<svg width="18" height="18"')} Quiz</button></div></div>
+      </section>
+      <section class="card pw-settings" aria-label="Pathway settings"><h2 class="pw-h pw-only-m" style="margin-bottom:12px">Settings</h2>
         <div class="field"><label class="f">Title</label><input class="input" data-k="title" value="${esc(draft.title)}"></div>
-        <div class="field"><label class="f">Summary</label><textarea class="input" data-k="summary" style="min-height:70px">${esc(draft.summary)}</textarea></div>
+        <div class="field"><label class="f">Summary</label><textarea class="input autogrow" data-k="summary" rows="2">${esc(draft.summary)}</textarea></div>
         <div class="grid g2"><div class="field"><label class="f">Certificate valid for</label>${(() => { const m = draft.validityMonths, preset = [6, 12, 24, 36].includes(m) ? String(m) : m > 0 ? 'custom' : 'never';
           return `<select class="input" id="vsel">${[['6', '6 months'], ['12', '12 months'], ['24', '2 years'], ['36', '3 years'], ['custom', 'Custom…'], ['never', 'No expiry']].map(([v, l]) => `<option value="${v}" ${preset === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
           <div class="row" id="vcustom" style="margin-top:8px;gap:8px;${preset === 'custom' ? '' : 'display:none'}"><input class="input" type="number" min="1" max="120" id="vmonths" value="${m > 0 ? m : 18}" style="width:100px"><span class="small muted">months</span></div>`; })()}</div>
         <div class="field"><label class="f">Colour</label><input class="input" type="color" data-k="colour" value="${draft.colour}" style="height:44px;padding:4px"></div></div>
         <div class="field"><label class="f">Required for roles</label><div class="checks">${db.roles.map(r => `<label><input type="checkbox" name="rr" value="${esc(r)}" ${draft.requiredForRoles.includes(r) ? 'checked' : ''}>${esc(r)}</label>`).join('')}</div><div class="help">Also add it to events under <a href="#/admin/events">Events</a>.</div></div>
-        <div class="field"><label class="f">Attestation statement</label><textarea class="input" data-k="attestation">${esc(draft.attestation)}</textarea></div>
-        <label class="row small" style="gap:8px"><input type="checkbox" id="act" ${draft.active !== false ? 'checked' : ''} style="accent-color:var(--red-600)"> Active (assign to volunteers)</label>
-      </div>
+        <div class="field"><label class="f">Attestation statement</label><textarea class="input autogrow" data-k="attestation" rows="3">${esc(draft.attestation)}</textarea></div>
+        <label class="row small" style="gap:10px;min-height:44px"><input type="checkbox" id="act" ${draft.active !== false ? 'checked' : ''}> Active (assign to volunteers)</label>
+      </section>
     </div>
-    <h3 style="margin:28px 0 10px">Version history</h3>
-    <div class="card">${(live.versions || []).length ? `<ul class="timeline">${live.versions.slice().reverse().map(v => `<li><span class="when">${fmtDT(v.at)}</span><span><b>v${v.version}</b> — ${esc(v.note || '')} <span class="muted">· ${esc(v.by || '')}</span></span></li>`).join('')}</ul>` : '<div class="empty">Not published yet</div>'}</div>`);
+    <section class="pw-history" data-tab="${pwTab}"><h2 class="pw-h" style="margin:28px 0 10px">Version history</h2>
+    <div class="card">${(live.versions || []).length ? `<ul class="timeline">${live.versions.slice().reverse().map(v => `<li><span class="when">${fmtDT(v.at)}</span><span><b>v${v.version}</b> — ${esc(v.note || '')} <span class="muted">· ${esc(v.by || '')}</span></span></li>`).join('')}</ul>` : '<div class="empty">Not published yet</div>'}</div></section>
+    ${changed() ? `<div class="pwbar" role="region" aria-label="Unpublished changes"><span><b>Unpublished changes</b><br><span class="tiny">Volunteers still see v${live.version}</span></span><button class="btn red" id="pub2">Publish v${live.version + 1}</button></div>` : ''}`);
 
   const refresh = () => renderPathwayEditor(id);
-  $$('[data-k]').forEach(el => el.oninput = el.onchange = () => { draft[el.dataset.k] = el.dataset.num != null ? +el.value : el.value; $('#pub').disabled = !changed(); });
-  $$('[name=rr]').forEach(el => el.onchange = () => { draft.requiredForRoles = $$('[name=rr]:checked').map(x => x.value); $('#pub').disabled = !changed(); });
-  $('#act').onchange = e => { draft.active = e.target.checked; $('#pub').disabled = !changed(); };
-  const vupd = () => { const v = $('#vsel').value; $('#vcustom').style.display = v === 'custom' ? '' : 'none'; draft.validityMonths = v === 'never' ? 0 : v === 'custom' ? Math.max(1, +$('#vmonths').value || 1) : +v; $('#pub').disabled = !changed(); };
+  const syncPub = () => { const c = changed(); $('#pub').disabled = !c; const bar = $('.pwbar');
+    if (c && !bar) { app().insertAdjacentHTML('beforeend', `<div class="pwbar" role="region" aria-label="Unpublished changes"><span><b>Unpublished changes</b><br><span class="tiny">Volunteers still see v${live.version}</span></span><button class="btn red" id="pub2">Publish v${live.version + 1}</button></div>`); $('#pub2').onclick = () => $('#pub').click(); }
+    else if (!c && bar) bar.remove(); };
+  $$('[data-pwt]').forEach(b => b.onclick = () => { pwTab = b.dataset.pwt; $$('[data-pwt]').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); }); $$('.pwgrid,.pw-history').forEach(x => x.dataset.tab = pwTab); });
+  $('#pub2') && ($('#pub2').onclick = () => $('#pub').click());
+  $$('[data-k]').forEach(el => el.oninput = el.onchange = () => { draft[el.dataset.k] = el.dataset.num != null ? +el.value : el.value; syncPub(); });
+  $$('[name=rr]').forEach(el => el.onchange = () => { draft.requiredForRoles = $$('[name=rr]:checked').map(x => x.value); syncPub(); });
+  $('#act').onchange = e => { draft.active = e.target.checked; syncPub(); };
+  const vupd = () => { const v = $('#vsel').value; $('#vcustom').style.display = v === 'custom' ? '' : 'none'; draft.validityMonths = v === 'never' ? 0 : v === 'custom' ? Math.max(1, +$('#vmonths').value || 1) : +v; syncPub(); };
   $('#vsel').onchange = vupd; $('#vmonths').oninput = vupd;
   $$('[data-mv]').forEach(b => b.onclick = () => { const [i, d] = b.dataset.mv.split(',').map(Number); const [x] = draft.steps.splice(i, 1); draft.steps.splice(i + d, 0, x); refresh(); });
   $$('[data-es]').forEach(b => b.onclick = () => stepEditor(draft.steps[+b.dataset.es], refresh));
@@ -1006,8 +1014,8 @@ function stepEditor(step, done, isNew) {
         return `<div class="qitem ${openQs.has(q.id) ? 'open' : ''}" data-qid="${q.id}">
         <button type="button" class="qsum" aria-expanded="${openQs.has(q.id)}"><span class="qn">Q${i + 1}</span><span class="qs-main"><span class="qs-text">${esc(q.text) || '<i class="muted">New question</i>'}</span><span class="qs-ans">${(q.options[q.correct] || '').trim() ? `✓ ${esc(q.options[q.correct])}` : ''}</span></span>${bad ? '<span class="qwarn">Incomplete</span>' : ''}<span class="qchev">${ICON.down}</span></button>
         <div class="qedit" data-qi="${i}">
-          <textarea class="input" data-qf="text" style="min-height:54px" placeholder="Question">${esc(q.text)}</textarea>
-          ${q.options.map((o, k) => `<div class="optrow"><input type="radio" name="qc${i}" value="${k}" ${q.correct === k ? 'checked' : ''} title="Mark as correct answer"><input class="input" data-qo="${k}" value="${esc(o)}" placeholder="Option ${'ABCD'[k]}" style="padding:8px 10px"></div>`).join('')}
+          <textarea class="input autogrow" data-qf="text" rows="2" placeholder="Question">${esc(q.text)}</textarea>
+          ${q.options.map((o, k) => `<div class="optrow"><input type="radio" name="qc${i}" value="${k}" ${q.correct === k ? 'checked' : ''} title="Mark as correct answer"><textarea class="input autogrow" rows="1" data-qo="${k}" placeholder="Option ${'ABCD'[k]}" style="padding:8px 10px">${esc(o)}</textarea></div>`).join('')}
           <input class="input" data-qf="explanation" value="${esc(q.explanation || '')}" placeholder="Explanation shown after the quiz" style="margin-top:8px;padding:8px 10px;font-size:14px">
           <div class="row between" style="margin-top:10px"><button class="btn ghost xs" data-qdel="${i}" style="color:var(--red-600)">${ICON.trash} Delete question</button><button class="btn ghost xs" data-qdone="${q.id}">Done</button></div>
         </div></div>`; }).join('') || '<div class="empty">No questions yet</div>'}</div>
@@ -1017,7 +1025,7 @@ function stepEditor(step, done, isNew) {
     $('#qlock', body).onchange = e => { $('#qlockn', body).style.display = e.target.checked ? '' : 'none'; $('#qlockoff', body).style.display = e.target.checked ? 'none' : ''; };
     const addQ = () => { keep(); const q = { id: uid('q_'), text: '', options: ['', '', '', ''], correct: 0, explanation: '' }; work.questions.push(q); openQs.add(q.id); drawQuiz(); const el = $(`[data-qid="${q.id}"]`, body); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(() => $('textarea', el)?.focus(), 250); };
     $('#qadd', body).onclick = addQ; $('#qadd2', body).onclick = addQ;
-    $$('.qsum', body).forEach(b => b.onclick = () => { const it = b.closest('.qitem'), id = it.dataset.qid; const open = !it.classList.contains('open'); it.classList.toggle('open', open); b.setAttribute('aria-expanded', open); open ? openQs.add(id) : openQs.delete(id); if (open) setTimeout(() => $('textarea', it)?.focus(), 30); });
+    $$('.qsum', body).forEach(b => b.onclick = () => { const it = b.closest('.qitem'), id = it.dataset.qid; const open = !it.classList.contains('open'); it.classList.toggle('open', open); $$('textarea.autogrow', it).forEach(grow); b.setAttribute('aria-expanded', open); open ? openQs.add(id) : openQs.delete(id); if (open) setTimeout(() => $('textarea', it)?.focus(), 30); });
     $$('[data-qdone]', body).forEach(b => b.onclick = () => { keep(); openQs.delete(b.dataset.qdone); drawQuiz(); });
     $$('[data-qall]', body).forEach(b => b.onclick = () => { keep(); work.questions.forEach(q => b.dataset.qall === '1' ? openQs.add(q.id) : openQs.delete(q.id)); drawQuiz(); });
     $$('.qedit', body).forEach(el => el.addEventListener('input', () => { const it = el.closest('.qitem'), i = +el.dataset.qi; const t = $('[data-qf=text]', el).value, opts = $$('[data-qo]', el).map(x => x.value), c = +($('input[type=radio]:checked', el)?.value || 0);

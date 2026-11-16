@@ -544,8 +544,12 @@ function a11yPass(root = document) {
     const n = x.closest('.card,.dtrain,tr,.row')?.querySelector('h3,b'); if (n) x.setAttribute('aria-label', n.textContent.trim()); });
   root.querySelectorAll('svg:not([role]):not([aria-hidden])').forEach(x => x.setAttribute('aria-hidden', 'true'));
   root.querySelectorAll('img:not([alt])').forEach(x => x.setAttribute('alt', ''));
+  root.querySelectorAll('textarea.autogrow').forEach(t => { if (t.offsetParent && !t.dataset.g) { t.dataset.g = 1; grow(t); } });
   const m = document.querySelector('main'); if (m && !m.id) { m.id = 'main'; m.tabIndex = -1; }
 }
+/* textareas marked autogrow fit their content */
+const grow = t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px'; };
+document.addEventListener('input', e => { if (e.target.matches?.('textarea.autogrow')) grow(e.target); });
 let _a11yQ = false;
 new MutationObserver(() => { if (_a11yQ) return; _a11yQ = true; requestAnimationFrame(() => { _a11yQ = false; a11yPass(); }); }).observe(document.documentElement, { childList: true, subtree: true });
 
