@@ -41,3 +41,12 @@ The demo simulates a backend for up to ~3,000 volunteers with no database or ema
 4. Replace `sendEmails()` in `src/admin.js` with a call to an API route that sends through Resend; keep the archived filter on the server too.
 5. Retention: a Cron Trigger (daily) running the SQL at the bottom of `schema.sql`.
 6. Replace the demo admin login with Cloudflare Access in front of `/admin`.
+
+## Sending, scheduling and releasing training
+
+- **Smart reminders**: "Send reminders" (People, Emails, event pages, or a multi-select) gives each person the template that fits them: not started, event coming up, expiring or expired. You can untick groups, preview each group, and send now or schedule.
+- **Compose**: choose recipients from a checklist, send yourself a test, then send now or schedule (quick picks, or a set time before an event).
+- **Scheduled sends** queue in `db.scheduled` and go out when due (checked when the app opens and every 30 seconds in the demo). Live version: a Cron Trigger. They're listed under Emails → Coming up, with Preview, Send now and Cancel.
+- **Training release per event**: send invites as soon as people are added, a set number of weeks before the event, on a date you choose, or hold them until you release them. People can be added any time; invites and that event's reminders wait until release.
+- **People multi-select**: tick rows or a whole page, or select everyone matching the filters. Then send reminders, email, add to an event, archive or reactivate.
+- **Add several events**: type the events into the grid, or paste them from a spreadsheet. Training and release settings are shared across all of them.

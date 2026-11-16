@@ -418,6 +418,8 @@ addEventListener('hashchange', e => { try { scrollMem[new URL(e.oldURL).hash || 
 function route() {
   cleanup.forEach(f => { try { f(); } catch { } }); cleanup = [];
   if (!route.keepOverlays) { closeModal(); document.getElementById('drawer')?.remove(); }
+  if (!(location.hash || '').startsWith('#/admin')) document.getElementById('mailpops')?.remove();   // email pop-ups are an admin-only demo aid
+  document.getElementById('emenu')?.remove();
   const cur = location.hash || '#/';
   navBack = navStack.length > 1 && navStack[navStack.length - 2] === cur;
   if (route.replacing) { navStack[navStack.length - 1] = cur; route.replacing = false; navBack = false; }
@@ -437,14 +439,18 @@ function route() {
 }
 function go(h) { if (location.hash === h) route(); else location.hash = h; }
 
+/* topbar: on phones the logo shrinks to the flame, a Back button becomes an icon,
+   and anything beyond two actions folds into a menu (admins also get their nav there) */
 function topbar(right = '', home = '#/') {
-  return `<div class="topbar"><div class="in">
-    <a class="brand" href="${home}">${LOGO(40)}<span class="brand-div"></span><span class="brand-lbl"><small>Safeguarding</small><b>Training</b></span></a>
-    <div class="spacer"></div>${right}</div></div>`;
+  let back = ''; right = right.replace(/<a class="btn ghost sm[^"]*" href="[^"]*" data-back="[^"]*">[\s\S]*?<\/a>/, m => { back = m; return ''; });
+  const menu = (right.match(/class="btn /g) || []).length > 2 || right.includes('tb-nav');
+  return `<div class="topbar ${menu ? 'hasmenu' : ''}"><div class="in">
+    <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30)}</span><span class="brand-div"></span><span class="brand-lbl"><small>Safeguarding</small><b>Training</b></span></a>
+    <div class="spacer"></div>${back ? `<span class="tb-back">${back}</span>` : ''}<div class="tb-acts">${right}</div>${menu ? `<button class="iconbtn tb-more" data-act="tbmenu" aria-label="Menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>` : ''}</div></div>`;
 }
 function demobar(active) {
   const first = db.people[0];
-  return `<nav class="demobar noprint" aria-label="Demo navigation"><span>Demo</span>
+  return `<nav class="demobar noprint" aria-label="Demo navigation"><button class="db-tog" data-act="demobar" aria-label="Demo menu">Demo</button><span>Demo</span>
     <a href="#/" class="${active === 'hub' ? 'on' : ''}">Start</a>
     <a href="${currentVolunteer() ? '#/me' : '#/login'}" class="${active === 'learner' ? 'on' : ''}">Volunteer</a>
     <a href="#/admin" class="${active === 'admin' ? 'on' : ''}">Admin</a></nav>`;
@@ -659,6 +665,19 @@ function learnerRoute(parts) {
   if (parts[0] === 'cert' && parts[1]) { const c = db.completions.find(x => x.id === parts[1]); if (!c || c.personId !== person.id) return replaceHash('#/me'); return renderCert(parts[1], person); }
   renderLearnerHome(person);
 }
+const REFRESH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
+/* what a learner needs to know about renewing: expiring soon, expired, or reset by an admin */
+function refreshInfo(person, pw, st) {
+  if (st.key === 'due') return { kind: 'due', title: `Refresher due by ${fmtDate(st.c.expiresAt)}`, text: `Your certificate is still valid, but it runs out in ${Math.max(1, Math.ceil((new Date(st.c.expiresAt) - Date.now()) / DAY))} days. Refresh it now so you can keep serving.` };
+  if (st.key === 'expired' || (st.key === 'progress' && st.c && new Date(st.c.expiresAt) < new Date())) return { kind: 'expired', title: `Expired ${fmtDate(st.c.expiresAt)}`, text: 'You’ll need to renew this before you next serve.' };
+  if (['none', 'progress'].includes(st.key)) { const r = [...db.audit].reverse().find(a => a.personId === person.id && a.pathwayId === pw.id && a.action === 'training_reset');
+    if (r) return { kind: 'reset', title: `Please redo this training`, text: `It was reset by ${esc(db.settings.short || 'SUNI')} on ${fmtDate(r.at)}${r.detail?.reason ? ` — “${esc(r.detail.reason)}”` : ''}.` }; }
+  return null;
+}
+function refreshRing(kind, pct) {
+  const col = kind === 'due' ? 'var(--amber)' : 'var(--red)'; const r = 28, c = 2 * Math.PI * r;
+  return `<div class="ring rring ${kind}"><svg width="68" height="68"><circle cx="34" cy="34" r="${r}" stroke="#EFEAE4" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${col}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${kind === 'due' ? '6 6' : c}" stroke-dashoffset="${kind === 'due' ? 0 : c * (1 - pct / 100)}"/></svg><b style="color:${col}">${pct && kind !== 'due' ? pct + '%' : kind === 'expired' ? '!' : REFRESH_SVG}</b></div>`;
+}
 function ring(pct, colour = 'var(--red)') {
   const r = 28, c = 2 * Math.PI * r;
   return `<div class="ring"><svg width="68" height="68"><circle cx="34" cy="34" r="${r}" stroke="#EFEAE4" stroke-width="7" fill="none"/><circle cx="34" cy="34" r="${r}" stroke="${colour}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - pct / 100)}" style="transition:stroke-dashoffset .8s var(--ease)"/></svg><b>${pct === 100 ? `<span style="color:${colour};width:22px;display:block">${ICON.check}</span>` : pct + '%'}</b></div>`;
@@ -666,7 +685,8 @@ function ring(pct, colour = 'var(--red)') {
 function renderLearnerHome(person) {
   const req = requiredPathwaysFor(person);
   const evs = person.eventIds.map(EventById).filter(Boolean);
-  const done = req.filter(p => ['complete', 'due'].includes(statusOf(person, p).key)).length;
+  const done = req.filter(p => statusOf(person, p).key === 'complete').length;
+  const refreshN = req.filter(p => refreshInfo(person, p, statusOf(person, p))).length;
   const allDone = req.length && done === req.length;
   const unread = (db.outbox || []).filter(m => m.personId === person.id && !(db.readMail || {})[m.id]).length;
   app().innerHTML = topbar(`${demoOn() ? `<a class="btn ghost sm" href="#/inbox/${person.token}" title="Demo: see the emails this volunteer has been sent">📬 Demo inbox${unread ? ` <span class="ibbadge">${unread}</span>` : ''}</a>` : ''}<span class="person small"><span class="avatar" style="background:${avatarColour(person.name)}">${initials(person.name)}</span><b class="hide-sm">${esc(person.name)}</b></span><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
@@ -681,17 +701,19 @@ function renderLearnerHome(person) {
     ${(() => { const rn = evs.filter(e => eventState(person, e) === 'renew'); if (!rn.length) return '';
       const exp = Math.min(...rn.flatMap(e => e.requiredPathways.map(pid => +new Date(latestCompletion(person.id, pid).expiresAt))));
       return `<div class="notice warn" style="margin-bottom:18px">${ICON.info}<div><b>Heads up:</b> a certificate of yours runs out on ${fmtDate(exp)}, before <b>${rn.map(e => esc(e.name)).join('</b> and <b>')}</b>. You’ll be able to refresh it from ${fmtDate(exp - (db.settings.dueSoonDays || 30) * DAY)}.</div></div>`; })()}
-    <div class="row between" style="margin-bottom:12px"><h2>Your training</h2><span class="muted small">${done} of ${req.length} complete</span></div>
+    <div class="row between" style="margin-bottom:12px"><h2>Your training</h2><span class="muted small">${done} of ${req.length} up to date${refreshN ? ` · <b style="color:#A86A0C">${refreshN} to refresh</b>` : ''}</span></div>
     <div class="grid" style="gap:14px">
     ${req.length ? req.map(p => {
       const st = statusOf(person, p); const pr = prog(person.id, p.id);
       const pct = ['complete', 'due'].includes(st.key) ? 100 : pctDone(pr, p);
       const why = [...p.requiredForRoles.filter(r => person.roles.includes(r)).map(r => `${r} role`), ...evs.filter(e => e.requiredPathways.includes(p.id)).map(e => e.name)];
-      const cta = st.key === 'complete' || st.key === 'due' ? `<a class="btn ghost sm" href="#/me/cert/${st.c.id}">View certificate</a>` + (st.key === 'due' ? ` <a class="btn red sm" href="#/me/p/${p.id}">Refresh now</a>` : '')
+      const rf = refreshInfo(person, p, st);
+      const cta = st.key === 'complete' || st.key === 'due' ? (st.key === 'due' ? `<a class="btn red sm" href="#/me/p/${p.id}">${REFRESH_SVG.replace('<svg', '<svg width="16" height="16"')} Refresh now</a> ` : '') + `<a class="btn ghost sm" href="#/me/cert/${st.c.id}">${st.key === 'due' ? 'Current certificate' : 'View certificate'}</a>`
         : st.key === 'locked' ? `<span class="small muted">We’ll be in touch to help</span>`
-          : `<a class="btn red sm" href="#/me/p/${p.id}">${pct ? 'Continue' : st.key === 'expired' ? 'Renew' : 'Start'} ${ICON.arrow}</a>`;
-      return `<div class="card pcard" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}">
-        ${ring(pct, ['complete', 'due'].includes(st.key) ? 'var(--teal)' : p.colour)}
+          : `<a class="btn red sm" href="#/me/p/${p.id}">${pct ? 'Continue' : rf ? (rf.kind === 'reset' ? 'Start again' : 'Renew now') : 'Start'} ${ICON.arrow}</a>`;
+      return `<div class="card pcard ${rf ? 'needs-' + rf.kind : ''}" data-href="${st.key === 'complete' ? '' : `#/me/p/${p.id}`}">
+        ${rf ? `<div class="rfband">${rf.kind === 'expired' ? ICON.info : REFRESH_SVG}<div><b>${rf.title}</b><span>${rf.text}</span></div></div>` : ''}
+        ${rf ? refreshRing(rf.kind, st.key === 'progress' ? pctDone(pr, p) : 0) : ring(pct, st.key === 'complete' ? 'var(--teal)' : p.colour)}
         <div style="flex:1;min-width:0">
           <div class="row" style="gap:8px;margin-bottom:4px"><h3>${esc(p.title)}</h3>${chip(st)}</div>
           <p class="muted small" style="margin:0 0 6px">${esc(p.summary)}</p>
@@ -718,10 +740,14 @@ function renderPlayer(person, pathway, stepParam) {
   const kindLabel = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz', attest: 'Attestation' };
   app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me">${ICON.back} My training</a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
-    <aside>
+    <aside id="paside">
       <div class="eyebrow">Pathway · v${pathway.version}</div>
-      <h2 style="margin:4px 0 16px">${esc(pathway.title)}</h2>
-      <ol class="steps">${steps.map((s, i) => {
+      <h2 class="ptitle">${esc(pathway.title)}</h2>
+      <button class="stepmini" data-act="steps" aria-expanded="false" aria-controls="steplist">
+        <span class="sm-dots">${steps.map((s, i) => `<i class="${s.type !== 'attest' && stepDone(pr, s) ? 'd' : ''} ${i === idx ? 'c' : ''}"></i>`).join('')}</span>
+        <span class="sm-txt"><span class="k">Step ${idx + 1} of ${steps.length} · ${kindLabel[step.type]}</span><b>${esc(step.title)}</b></span>
+        <span class="sm-chev">All steps <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></span></button>
+      <ol class="steps" id="steplist">${steps.map((s, i) => {
         const done = s.type !== 'attest' && stepDone(pr, s); const lock = i > firstOpen;
         return `<li class="${done ? 'done' : ''} ${i === idx ? 'cur' : ''} ${lock ? 'lock' : ''}" ${lock ? 'aria-disabled="true"' : `data-step="${i}"`} tabindex="${lock ? -1 : 0}">
           <span class="num">${done ? ICON.check.replace('<svg', '<svg width="16" height="16"') : lock ? ICON.lock.replace('<svg', '<svg width="14" height="14"') : i + 1}</span>
@@ -729,7 +755,7 @@ function renderPlayer(person, pathway, stepParam) {
       }).join('')}</ol>
     </aside>
     <section id="stage" class="card pad-lg"></section>
-  </div></main>` + worriedFab() + demobar('learner');
+  </div></main>` + worriedFab();
   $$('.steps li[data-step]').forEach(li => { const f = () => go(`#/me/p/${pathway.id}/${li.dataset.step}`); li.addEventListener('click', f); li.addEventListener('keydown', e => e.key === 'Enter' && f()); });
   const next = () => go(`#/me/p/${pathway.id}/${idx + 1}`);
   const stage = $('#stage');
@@ -1149,7 +1175,7 @@ function renderCert(certId, viewer) {
   const person = c && Person(c.personId);
   const back = viewer ? '#/me' : '#/admin';
   if (!c || !person) { app().innerHTML = topbar() + `<main class="wrap"><div class="card empty">Certificate not found.</div></main>`; return; }
-  app().innerHTML = topbar(`<a class="btn ghost sm noprint" href="${back}" data-back="${back}">${ICON.back} Back</a><button class="btn ghost sm noprint" id="scanprev">📱 Preview scan</button><button class="btn red sm noprint" onclick="print()">${ICON.print} Print / Save PDF</button>`, back) + `<main class="wrap fadein">
+  app().innerHTML = topbar(`<a class="btn ghost sm noprint" href="${back}" data-back="${back}">${ICON.back} Back</a><button class="btn ghost sm noprint hide-sm" id="scanprev">📱 Preview scan</button><button class="btn red sm noprint hide-sm" onclick="print()">${ICON.print} Print / Save PDF</button>`, back) + `<main class="wrap fadein">
     ${c.revoked ? `<div class="notice bad noprint" style="max-width:980px;margin:0 auto 14px">${ICON.info}<div><b>${c.revoked.replacedBy ? `Replaced by ${esc(c.revoked.replacedBy)}` : 'This certificate has been revoked'}</b> on ${fmtDate(c.revoked.at)} — “${esc(c.revoked.reason)}”</div></div>` : ''}
     <div class="cert ${c.revoked ? 'cert-void' : ''}">
       <div class="flamebg">${FLAME(300)}</div>
@@ -1168,8 +1194,18 @@ function renderCert(certId, viewer) {
         <div class="cert-tag">Light to live by</div>
       </div>
       <div class="tiny muted" style="margin-top:14px;position:relative">Scripture Union Northern Ireland · Charity number NIC104852 · Verify at ${esc(publicBase() ? publicBase().replace(/^https?:\/\//, '').replace(/\/$/, '') + ' · ID ' + c.id : 'the SUNI training site')}</div>
-    </div></main>` + demobar(viewer ? 'learner' : 'admin');
-  $('#scanprev').onclick = () => scanPreview(c);
+    </div>
+    ${(() => { const valid = !c.revoked && new Date(c.expiresAt) > new Date();
+      return `<div class="cert-m ${c.revoked ? 'void' : ''}"><div class="cm-top">${LOGO(40)}<span class="cm-tag ${valid ? 'ok' : 'bad'}">${c.revoked ? 'Not valid' : valid ? '✓ Valid' : 'Expired'}</span></div>
+        <div class="cm-band"></div>
+        <div class="cm-body"><div class="eyebrow">Safeguarding training certificate</div><div class="cm-name">${esc(c.nameOnCert || person.name)}</div>
+          <p>has completed <b>${esc(c.pathwayTitle)}</b>${c.score != null ? ` with a score of <b>${c.score}%</b>` : ''}.</p>
+          <dl class="cm-meta"><div><dt>Completed</dt><dd>${fmtDate(c.completedAt)}</dd></div><div><dt>Valid until</dt><dd>${fmtDate(c.expiresAt)}</dd></div><div><dt>Certificate ID</dt><dd>${esc(c.id)}</dd></div><div><dt>${c.manual ? 'Recorded' : 'Signed as'}</dt><dd>${esc(c.manual ? c.manual.method.split(' (')[0] : c.attestationName)}</dd></div></dl>
+          ${verifyUrl(c) ? `<div class="cm-qr">${qrSvg(verifyUrl(c))}<span>Anyone can scan this to check it’s genuine</span></div>` : ''}
+          <div class="cm-acts"><button class="btn red" onclick="print()">${ICON.dl} Download PDF</button><button class="btn ghost" id="scanprev2">📱 Preview scan</button></div>
+          <p class="tiny muted" style="margin:12px 0 0">The PDF is the full A4 certificate. Scripture Union Northern Ireland · NIC104852</p></div></div>`; })()}
+    </main>`;
+  $('#scanprev').onclick = () => scanPreview(c); $('#scanprev2') && ($('#scanprev2').onclick = () => scanPreview(c));
   $('.qr-off a') && 0;
 }
 function scanPreview(c) {
@@ -1224,6 +1260,9 @@ document.addEventListener('click', e => {
   const bk = e.target.closest('[data-back]'); if (bk) { e.preventDefault(); appBack(bk.dataset.back); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act === 'worried') showWorried();
+  if (a.dataset.act === 'tbmenu') { const t = a.closest('.topbar'); const o = t.classList.toggle('open'); a.setAttribute('aria-expanded', o); }
+  if (a.dataset.act === 'demobar') a.closest('.demobar').classList.toggle('open');
+  if (a.dataset.act === 'steps') { const o = $('#paside').classList.toggle('open'); a.setAttribute('aria-expanded', o); }
   if (a.dataset.act === 'logout') logout('vol');
   if (a.dataset.act === 'adminlogout') logout('admin');
 });
