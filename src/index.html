@@ -52,7 +52,7 @@ p{margin:0 0 .8em}
 .brand small{display:block;font-family:var(--cond);font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-size:12px;line-height:1}
 .brand b{display:block;font-size:16px;line-height:1.1}
 .brand-div{width:1.5px;height:30px;background:var(--line);display:block}
-@media(max-width:620px){.brand-lbl,.brand-div{display:none}}
+@media(max-width:620px){.brand-div{display:none}}
 .cert-tag{font-family:var(--cond);text-transform:uppercase;letter-spacing:.1em;color:var(--red-600);font-weight:700;align-self:end}
 .spacer{flex:1}
 .wrap{max-width:1440px;margin:0 auto;padding:28px 32px 90px}
@@ -676,7 +676,8 @@ html,body{overflow-x:clip}
 }
 @media(max-width:620px){
   .topbar .in{gap:8px;padding:10px 14px}
-  .brand-full,.brand-div,.brand-lbl{display:none}.brand-flame{display:block}
+  .brand-full,.brand-div{display:none}.brand-flame{display:block}
+  .brand{gap:8px}.brand-lbl{display:flex!important}
   .tb-back .btn{font-size:0;gap:0;padding:9px 11px}.tb-back .btn svg{width:18px;height:18px}
   .tb-acts{gap:6px}.tb-acts .btn.sm{padding:8px 12px;font-size:14px}
   .wrap{padding-left:16px;padding-right:16px}
@@ -878,11 +879,39 @@ textarea.autogrow{resize:none;overflow:hidden;min-height:44px;line-height:1.4}
 .vopt{display:flex;gap:12px;align-items:flex-start;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer}
 .vopt:has(input:checked){border-color:var(--red);background:#FFFBFA}.vopt input{margin-top:3px}.vopt>span{display:grid;gap:2px}
 .vnum{font-family:var(--cond);letter-spacing:.04em;color:var(--red-600);margin-left:4px}
+
+/* rich text editor */
+.rte{border:1.5px solid var(--line);border-radius:14px;background:#fff;overflow:hidden}
+.rte:focus-within{border-color:var(--red);box-shadow:0 0 0 4px var(--red-50)}
+.rte-bar{display:flex;align-items:center;justify-content:flex-start;gap:0;padding:4px 6px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);background:#FBFAF8;position:sticky;top:0;z-index:2;flex-wrap:nowrap}
+.rte-b{border:0;background:none;min-width:40px;height:40px;border-radius:10px;display:grid;place-items:center;cursor:pointer;color:var(--ink-2);font:inherit;font-size:16px}
+.rte-b svg{width:20px;height:20px}.rte-b:hover{background:#0000000a}.rte-b[aria-pressed=true]{background:var(--red-50);color:var(--red-600)}
+.rte-sep{width:1px;height:24px;background:var(--line);margin:0 3px;flex:none}.rte-b{flex:none}
+.rte-link{display:flex;gap:6px;padding:8px;border-bottom:1px solid var(--line);flex-wrap:wrap}.rte-link[hidden]{display:none}.rte-link .input{flex:1 1 180px}
+.rte-area{min-height:240px;max-height:55vh;overflow:auto;padding:14px 16px;outline:none;font-size:16px;line-height:1.6}
+.rte-area:focus-visible{outline:none}
+.rte-area h3{font-size:19px;margin:16px 0 6px}.rte-area h3:first-child{margin-top:0}.rte-area p{margin:0 0 10px}.rte-area ul,.rte-area ol{margin:0 0 10px;padding-left:24px}
+.rte-area a{color:var(--red-600);text-decoration:underline}
+.reading ol{padding-left:24px}.reading em{font-style:italic}
+@media (pointer:coarse){.rte-b{min-width:44px;height:44px}}
+@media(max-width:620px){.rte-area{max-height:50vh}}
+@media(max-width:620px){.brand{gap:10px}.brand-lbl{display:block}.brand b{font-size:15px}}
+
+/* platform name in the header, at every size */
+.brand-lbl{display:block!important;line-height:1.15}
+.brand-lbl b{font-size:18px!important;font-weight:800;letter-spacing:-.01em;white-space:nowrap}
+.brand-org{display:none!important}
+.vhead .brand-lbl small{display:block;margin-top:2px}
+@media(max-width:620px){
+  .brand-org{display:block!important;font-size:11px!important}
+  .brand-lbl b{font-size:16px!important}
+  .vhead .brand-full,.vhead .brand-div{display:none}
+}
+@media(max-width:360px){.brand-lbl b{font-size:14.5px!important}}
 </style>
 </head>
 <body>
 <a class="skip" href="#" onclick="event.preventDefault();var m=document.querySelector('main');if(m){m.tabIndex=-1;m.focus();}">Skip to main content</a>
-<div class="accent-rail" aria-hidden="true"></div>
 <div id="app"></div>
 <div id="toasts" role="status" aria-live="polite"></div><div id="srlive" class="sr-only" aria-live="polite"></div>
 <canvas id="confetti" style="position:fixed;inset:0;pointer-events:none;z-index:120;width:100%;height:100%"></canvas>

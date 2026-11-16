@@ -52,7 +52,7 @@ p{margin:0 0 .8em}
 .brand small{display:block;font-family:var(--cond);font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-size:12px;line-height:1}
 .brand b{display:block;font-size:16px;line-height:1.1}
 .brand-div{width:1.5px;height:30px;background:var(--line);display:block}
-@media(max-width:620px){.brand-lbl,.brand-div{display:none}}
+@media(max-width:620px){.brand-div{display:none}}
 .cert-tag{font-family:var(--cond);text-transform:uppercase;letter-spacing:.1em;color:var(--red-600);font-weight:700;align-self:end}
 .spacer{flex:1}
 .wrap{max-width:1440px;margin:0 auto;padding:28px 32px 90px}
@@ -676,7 +676,8 @@ html,body{overflow-x:clip}
 }
 @media(max-width:620px){
   .topbar .in{gap:8px;padding:10px 14px}
-  .brand-full,.brand-div,.brand-lbl{display:none}.brand-flame{display:block}
+  .brand-full,.brand-div{display:none}.brand-flame{display:block}
+  .brand{gap:8px}.brand-lbl{display:flex!important}
   .tb-back .btn{font-size:0;gap:0;padding:9px 11px}.tb-back .btn svg{width:18px;height:18px}
   .tb-acts{gap:6px}.tb-acts .btn.sm{padding:8px 12px;font-size:14px}
   .wrap{padding-left:16px;padding-right:16px}
@@ -878,11 +879,39 @@ textarea.autogrow{resize:none;overflow:hidden;min-height:44px;line-height:1.4}
 .vopt{display:flex;gap:12px;align-items:flex-start;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer}
 .vopt:has(input:checked){border-color:var(--red);background:#FFFBFA}.vopt input{margin-top:3px}.vopt>span{display:grid;gap:2px}
 .vnum{font-family:var(--cond);letter-spacing:.04em;color:var(--red-600);margin-left:4px}
+
+/* rich text editor */
+.rte{border:1.5px solid var(--line);border-radius:14px;background:#fff;overflow:hidden}
+.rte:focus-within{border-color:var(--red);box-shadow:0 0 0 4px var(--red-50)}
+.rte-bar{display:flex;align-items:center;justify-content:flex-start;gap:0;padding:4px 6px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);background:#FBFAF8;position:sticky;top:0;z-index:2;flex-wrap:nowrap}
+.rte-b{border:0;background:none;min-width:40px;height:40px;border-radius:10px;display:grid;place-items:center;cursor:pointer;color:var(--ink-2);font:inherit;font-size:16px}
+.rte-b svg{width:20px;height:20px}.rte-b:hover{background:#0000000a}.rte-b[aria-pressed=true]{background:var(--red-50);color:var(--red-600)}
+.rte-sep{width:1px;height:24px;background:var(--line);margin:0 3px;flex:none}.rte-b{flex:none}
+.rte-link{display:flex;gap:6px;padding:8px;border-bottom:1px solid var(--line);flex-wrap:wrap}.rte-link[hidden]{display:none}.rte-link .input{flex:1 1 180px}
+.rte-area{min-height:240px;max-height:55vh;overflow:auto;padding:14px 16px;outline:none;font-size:16px;line-height:1.6}
+.rte-area:focus-visible{outline:none}
+.rte-area h3{font-size:19px;margin:16px 0 6px}.rte-area h3:first-child{margin-top:0}.rte-area p{margin:0 0 10px}.rte-area ul,.rte-area ol{margin:0 0 10px;padding-left:24px}
+.rte-area a{color:var(--red-600);text-decoration:underline}
+.reading ol{padding-left:24px}.reading em{font-style:italic}
+@media (pointer:coarse){.rte-b{min-width:44px;height:44px}}
+@media(max-width:620px){.rte-area{max-height:50vh}}
+@media(max-width:620px){.brand{gap:10px}.brand-lbl{display:block}.brand b{font-size:15px}}
+
+/* platform name in the header, at every size */
+.brand-lbl{display:block!important;line-height:1.15}
+.brand-lbl b{font-size:18px!important;font-weight:800;letter-spacing:-.01em;white-space:nowrap}
+.brand-org{display:none!important}
+.vhead .brand-lbl small{display:block;margin-top:2px}
+@media(max-width:620px){
+  .brand-org{display:block!important;font-size:11px!important}
+  .brand-lbl b{font-size:16px!important}
+  .vhead .brand-full,.vhead .brand-div{display:none}
+}
+@media(max-width:360px){.brand-lbl b{font-size:14.5px!important}}
 </style>
 </head>
 <body>
 <a class="skip" href="#" onclick="event.preventDefault();var m=document.querySelector('main');if(m){m.tabIndex=-1;m.focus();}">Skip to main content</a>
-<div class="accent-rail" aria-hidden="true"></div>
 <div id="app"></div>
 <div id="toasts" role="status" aria-live="polite"></div><div id="srlive" class="sr-only" aria-live="polite"></div>
 <canvas id="confetti" style="position:fixed;inset:0;pointer-events:none;z-index:120;width:100%;height:100%"></canvas>
@@ -3654,7 +3683,7 @@ function topbar(right = '', home = '#/') {
   let back = ''; right = right.replace(/<a class="btn ghost sm[^"]*" href="[^"]*" data-back="[^"]*">[\s\S]*?<\/a>/, m => { back = m; return ''; });
   const menu = (right.match(/class="btn /g) || []).length > 2 || right.includes('tb-nav');
   return `<div class="topbar ${menu ? 'hasmenu' : ''}"><div class="in">
-    <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30).replace('alt="" aria-hidden="true"', 'alt="Scripture Union NI Safeguarding Training — home"')}</span><span class="brand-div"></span><span class="brand-lbl"><small>Safeguarding</small> <b>Training</b></span></a>
+    <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30).replace('alt="" aria-hidden="true"', 'alt="Scripture Union NI"')}</span><span class="brand-div"></span><span class="brand-lbl"><small class="brand-org">Scripture Union NI</small><b>Safeguarding Training</b></span></a>
     <div class="spacer"></div>${back ? `<span class="tb-back">${back}</span>` : ''}<div class="tb-acts">${right}</div>${menu ? `<button class="iconbtn tb-more" data-act="tbmenu" aria-label="Menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>` : ''}</div></div>`;
 }
 function demobar(active) {
@@ -4004,7 +4033,7 @@ function renderPlayer(person, pathway, stepParam) {
   app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me">${ICON.back} My training</a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
     <aside id="paside">
-      <div class="eyebrow">Pathway · ${vTag(pathway)}</div>
+      <div class="eyebrow">Safeguarding training</div>
       <h2 class="ptitle">${esc(pathway.title)}</h2>
       <button class="stepmini" data-act="steps" aria-expanded="false" aria-controls="steplist">
         <span class="sm-dots">${steps.map((s, i) => `<i class="${s.type !== 'attest' && stepDone(pr, s) ? 'd' : ''} ${i === idx ? 'c' : ''}"></i>`).join('')}</span>
@@ -4213,6 +4242,32 @@ function loadScript(src, ready, cbName) {
 }
 
 /* read & acknowledge */
+/* ---------- rich text: allow-listed HTML only (headings, paragraphs, lists, bold, italic, links) ---------- */
+function sanitizeHTML(html) {
+  const t = document.createElement('template'); t.innerHTML = String(html || '');
+  const MAP = { H1: 'h3', H2: 'h3', H3: 'h3', H4: 'h3', H5: 'h3', H6: 'h3', P: 'p', DIV: 'p', UL: 'ul', OL: 'ol', LI: 'li', STRONG: 'strong', B: 'strong', EM: 'em', I: 'em', A: 'a', BR: 'br' };
+  const walk = (node, out) => node.childNodes.forEach(n => {
+    if (n.nodeType === 3) { out.appendChild(document.createTextNode(n.textContent)); return; }
+    if (n.nodeType !== 1 || ['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'TEMPLATE', 'META', 'LINK'].includes(n.tagName)) return;
+    const tag = MAP[n.tagName];
+    if (!tag) { walk(n, out); return; }   // unknown tag: keep its text, drop the wrapper
+    // inline styles from Word/Docs: treat font-weight bold / italic spans as such
+    // headings/paragraphs can't hold blocks, and lists can't sit inside list items' text runs: unwrap them
+    if (['p', 'h3', 'strong', 'em', 'a'].includes(tag) && n.querySelector('p,div,ul,ol,li,h1,h2,h3,h4,h5,h6')) { walk(n, out); return; }
+    if (tag === 'li' && !['UL', 'OL'].includes(n.parentElement?.tagName)) { const p = document.createElement('p'); walk(n, p); if (p.textContent.trim()) out.appendChild(p); return; }
+    const el = document.createElement(tag);
+    if (tag === 'a') { const h = n.getAttribute('href') || ''; if (!/^(https?:|mailto:)/i.test(h)) { walk(n, out); return; } el.href = h; el.target = '_blank'; el.rel = 'noopener'; }
+    walk(n, el);
+    if (['p', 'h3', 'li', 'strong', 'em'].includes(tag) && !el.textContent.trim() && !el.querySelector('br')) return;
+    out.appendChild(el);
+  });
+  const box = document.createElement('div'); walk(t.content, box);
+  // wrap stray text at the top level in paragraphs
+  [...box.childNodes].forEach(n => { if (n.nodeType === 3 && n.textContent.trim() || n.nodeType === 1 && ['STRONG', 'EM', 'A'].includes(n.tagName)) { const p = document.createElement('p'); n.replaceWith(p); p.appendChild(n); } else if (n.nodeType === 3) n.remove(); });
+  return box.innerHTML;
+}
+const richBody = step => step.format === 'html' ? sanitizeHTML(step.body) : md(step.body);
+const plainText = step => (step.format === 'html' ? (() => { const d = document.createElement('div'); d.innerHTML = step.body || ''; return d.textContent; })() : step.body || '');
 function md(src) {
   const lines = String(src || '').split('\n'); let out = '', inList = false;
   const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\[(.+?)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
@@ -4226,7 +4281,7 @@ function md(src) {
 }
 function stageRead(stage, { person, pathway, pr, step, next }) {
   const done = stepDone(pr, step);
-  stage.innerHTML = stepHead('Read & acknowledge', step.title) + `<div class="reading" id="rd">${md(step.body)}</div>
+  stage.innerHTML = stepHead('Read & acknowledge', step.title) + `<div class="reading" id="rd">${richBody(step)}</div>
     ${step.link?.url ? `<p><a href="${esc(step.link.url)}" target="_blank" rel="noopener" class="btn ghost sm">${ICON.link} ${esc(step.link.label || 'Open document')}</a></p>` : ''}
     <div class="card" style="background:#FBFAF8;box-shadow:none;margin-top:22px">
       <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start"><input type="checkbox" id="ack" ${done ? 'checked disabled' : ''} style="width:22px;height:22px;accent-color:var(--red-600);margin-top:2px"><span style="font-weight:600">${esc(step.ackText || 'I have read and understood this.')}</span></label>
@@ -4429,7 +4484,7 @@ const unb64u = str => decodeURIComponent(escape(atob(str.replace(/-/g, '+').repl
 const SIGN_SALT = 'suni-sg-demo-2026';
 function certPayload(c) {
   const person = Person(c.personId);
-  const body = b64u(JSON.stringify({ n: c.nameOnCert || person?.name || c.attestationName, t: c.pathwayTitle, v: c.version, c: c.completedAt.slice(0, 10), e: c.expiresAt.slice(0, 10), s: c.score }));
+  const body = b64u(JSON.stringify({ n: c.nameOnCert || person?.name || c.attestationName, t: c.pathwayTitle, v: verLabel(P(c.pathwayId), c.version), c: c.completedAt.slice(0, 10), e: c.expiresAt.slice(0, 10), s: c.score }));
   return body + '.' + hash(c.id + body + SIGN_SALT);
 }
 const publicBase = () => (db.settings.publicUrl || '').trim().replace(/#.*$/, '') || (/^https?:/.test(location.protocol) ? location.href.split('#')[0] : '');
@@ -4453,7 +4508,6 @@ function renderCert(certId, viewer) {
         <div><b>Completed</b>${fmtDate(c.completedAt)}</div>
         <div><b>Valid until</b>${fmtDate(c.expiresAt)}</div>
         <div><b>Certificate ID</b>${esc(c.id)}</div>
-        <div><b>Course version</b>${vTag(P(c.pathwayId), c.version)}</div>
         <div><b>${c.manual ? 'Recorded' : 'Signed as'}</b>${esc(c.manual ? c.manual.method.split(' (')[0] : c.attestationName)}</div>
         <div class="cert-tag">Light to live by</div>
       </div>
@@ -4500,7 +4554,7 @@ function verifyCard(certId, payload) {
   const row = (k, v) => `<div class="vrow"><span>${k}</span><b>${v}</b></div>`;
   return `<div class="vcard">
     <div class="vtop" style="--tone:${S[0]}"><div class="vbadge">${ico}</div><div class="vk">Safeguarding certificate check</div><h1>${S[1]}</h1><p>${S[2]}</p></div>
-    ${data ? `<div class="vbody">${row('Name', esc(data.n))}${row('Training', `${esc(data.t)} <span class="muted" style="font-weight:600">v${data.v}</span>`)}${row('Completed', fmtDate(data.c) + (data.m ? ' <span class="muted" style="font-weight:600">(recorded by SUNI)</span>' : ''))}${row(state === 'valid' ? 'Valid until' : 'Expiry date', `<span style="color:${S[0]}">${fmtDate(data.e)}</span>`)}${data.s != null ? row('Quiz score', data.s + '%') : ''}${row('Certificate ID', `<span class="mono">${esc(certId)}</span>`)}
+    ${data ? `<div class="vbody">${row('Name', esc(data.n))}${row('Training', esc(data.t))}${row('Course version', 'v' + esc(typeof data.v === 'number' ? data.v + '.0' : data.v))}${row('Completed', fmtDate(data.c) + (data.m ? ' <span class="muted" style="font-weight:600">(recorded by SUNI)</span>' : ''))}${row(state === 'valid' ? 'Valid until' : 'Expiry date', `<span style="color:${S[0]}">${fmtDate(data.e)}</span>`)}${data.s != null ? row('Quiz score', data.s + '%') : ''}${row('Certificate ID', `<span class="mono">${esc(certId)}</span>`)}
       <div class="vchecked">${ICON.check.replace('<svg', '<svg width="13" height="13"')} Checked ${fmtDT(now())}</div></div>` : ''}
     <div class="vinfo">
       <details><summary>What does this certificate mean?</summary><p>The person named has watched SUNI’s safeguarding training, passed a short quiz and signed to say they’ll follow our safeguarding policy. It is <b>not</b> a criminal record check — AccessNI checks are handled separately.</p></details>
@@ -4511,12 +4565,12 @@ function verifyCard(certId, payload) {
 }
 function renderVerify(certId, payload) {
   if (!certId) {
-    app().innerHTML = `<div class="vpage"><header class="vhead">${LOGO(40)}</header><main class="vmain fadein"><div class="vcard"><div class="vtop" style="--tone:var(--red)"><div class="vbadge">${ICON.attest.replace('<svg', '<svg width="40" height="40"')}</div><div class="vk">Safeguarding certificate check</div><h1>Check a certificate</h1><p>Scan the QR code on a SUNI safeguarding certificate, or type its ID below.</p></div>
+    app().innerHTML = `<div class="vpage"><header class="vhead"><span class="brand">${LOGO(40)}<span class="brand-div"></span><span class="brand-lbl"><b>Safeguarding Training</b><small>Certificate check</small></span></span></header><main class="vmain fadein"><div class="vcard"><div class="vtop" style="--tone:var(--red)"><div class="vbadge">${ICON.attest.replace('<svg', '<svg width="40" height="40"')}</div><div class="vk">Safeguarding certificate check</div><h1>Check a certificate</h1><p>Scan the QR code on a SUNI safeguarding certificate, or type its ID below.</p></div>
       <div class="vbody"><form id="vf2" class="vform"><input class="input" id="vid" placeholder="SUNI-SG-2026-XXXXXX" autocomplete="off" style="text-transform:uppercase;font-size:17px;font-weight:700;letter-spacing:.03em"><button class="btn red">Check</button></form><div class="help">You’ll find the ID at the bottom of the certificate.</div></div></div></main></div>`;
     $('#vf2').onsubmit = e => { e.preventDefault(); const v = $('#vid').value.trim().toUpperCase(); if (v) go('#/verify/' + v); };
     return;
   }
-  app().innerHTML = `<div class="vpage"><header class="vhead">${LOGO(40)}</header><main class="vmain fadein">${verifyCard(certId, payload)}</main><footer class="vpfoot">Scripture Union Northern Ireland · Charity NIC104852 · Light to live by</footer></div>`;
+  app().innerHTML = `<div class="vpage"><header class="vhead"><span class="brand">${LOGO(40)}<span class="brand-div"></span><span class="brand-lbl"><b>Safeguarding Training</b><small>Certificate check</small></span></span></header><main class="vmain fadein">${verifyCard(certId, payload)}</main><footer class="vpfoot">Scripture Union Northern Ireland · Charity NIC104852 · Light to live by</footer></div>`;
 }
 
 /* global delegated actions */
@@ -5407,7 +5461,7 @@ function renderPathwayEditor(id) {
   const typeName = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz' };
   const stepSummary = s => s.type === 'video' ? (s.video?.source === 'file' ? `Uploaded file · ${esc(s.video.fileName || '')}` : `${s.video?.source === 'youtube' ? 'YouTube' : 'Vimeo'} · ${esc(s.video?.url || '')}`)
     : s.type === 'quiz' ? `${s.questions.length} questions in bank · ${s.drawCount} drawn · pass ${s.passMark}% · ${s.lock === false ? 'unlimited attempts' : `locks after ${s.maxAttempts} fails`}${s.questions.length < s.drawCount * 2 ? ' · <span style="color:#8A5508">tip: add more questions so retakes feel fresh</span>' : ''}`
-      : `${(s.body || '').split(/\s+/).length} words${s.link?.url ? ' · links to a document' : ''}`;
+      : `${plainText(s).trim().split(/\s+/).filter(Boolean).length} words${s.link?.url ? ' · links to a document' : ''}`;
   adminShell('pathways', pageHead(`<a href="#/admin/pathways">Pathways</a> / Edit`, esc(draft.title), `Live version: <b>${vTag(live)}</b>${live.version ? ` · published ${fmtDate(live.updatedAt)}` : ' · not published yet'}`,
     `<a class="btn ghost sm" href="#/admin/pathways" id="cancel">Close</a><button class="btn red sm" id="pub" ${changed() ? '' : 'disabled'}>Publish…</button>`) + `
     ${changed() ? `<div class="notice warn small" style="margin-bottom:16px">${ICON.info}<div><b>Unpublished changes.</b> Volunteers see the live version until you publish. Anyone partway through keeps the steps they’ve already done if those steps haven’t changed.</div></div>` : ''}
@@ -5538,9 +5592,10 @@ function stepEditor(step, done, isNew) {
     }
   };
   const drawRead = () => {
-    body.innerHTML = common + `<div class="field"><label class="f">Content</label><textarea class="input" id="sb" style="min-height:240px;font-family:ui-monospace,monospace;font-size:14px">${esc(work.body)}</textarea><div class="help">Use <code>## Heading</code>, <code>- bullet</code> and <code>**bold**</code>.</div></div>
+    body.innerHTML = common + `<div class="field"><label class="f" id="sblab">Content</label>${richEditor(work.format === 'html' ? sanitizeHTML(work.body) : md(work.body), 'sb')}<div class="help">Paste straight from Word or Google Docs — formatting is tidied automatically.</div></div>
       <div class="grid g2"><div class="field"><label class="f">Link label (optional)</label><input class="input" id="sll" value="${esc(work.link?.label || '')}" placeholder="Read the full policy"></div><div class="field"><label class="f">Link URL</label><input class="input" id="slu" value="${esc(work.link?.url || '')}" placeholder="https://…"></div></div>
       <div class="field"><label class="f">Acknowledgement statement</label><input class="input" id="sa" value="${esc(work.ackText || '')}"></div>`;
+    bindRichEditor($('#sb', body).closest('.rte'));
   };
   const drawQuiz = () => {
     body.innerHTML = common + `<div class="grid g3"><div class="field"><label class="f">Questions per attempt</label><input class="input" type="number" min="1" max="20" id="qd" value="${work.drawCount}"></div>
@@ -5589,7 +5644,7 @@ function stepEditor(step, done, isNew) {
   const keep = () => {
     work.title = $('#st', body)?.value ?? work.title;
     if (work.type === 'video') { work.description = $('#sd', body)?.value ?? ''; work.minWatchPct = +($('#mw', body)?.value || 95); if ($('#vurl', body)) work.video.url = $('#vurl', body).value.trim(); }
-    if (work.type === 'read') { work.body = $('#sb', body).value; work.ackText = $('#sa', body).value; const u = $('#slu', body).value.trim(); work.link = u ? { url: u, label: $('#sll', body).value.trim() || 'Open document' } : null; }
+    if (work.type === 'read') { work.body = sanitizeHTML($('#sb', body).innerHTML); work.format = 'html'; work.ackText = $('#sa', body).value; const u = $('#slu', body).value.trim(); work.link = u ? { url: u, label: $('#sll', body).value.trim() || 'Open document' } : null; }
     if (work.type === 'quiz') {
       work.drawCount = +$('#qd', body).value || 5; work.passMark = +$('#qp', body).value || 80; work.maxAttempts = +$('#qa', body).value || 3; work.lock = $('#qlock', body).checked;
       $$('.qedit', body).forEach(el => { const q = work.questions[+el.dataset.qi]; q.text = $('[data-qf=text]', el).value; q.explanation = $('[data-qf=explanation]', el).value; q.options = $$('[data-qo]', el).map(x => x.value); q.correct = +($(`input[type=radio]:checked`, el)?.value || 0); });
@@ -6476,6 +6531,40 @@ function undoSync() {
   db.completions = lastSync.completions;   // brings back anything removed when reactivating
   audit({ actor: 'admin', action: 'list_sync_undone', detail: { at: lastSync.at, ...lastSync.res } });
   lastSync = null; toast('Sync undone — everyone is back as they were'); route();
+}
+
+/* ---------- rich text editor (reading steps) ---------- */
+const RTE_TOOLS = [['h', 'Heading', '<b style="font-size:15px">H</b>'], ['bold', 'Bold', '<b>B</b>'], ['italic', 'Italic', '<i style="font-family:Georgia,serif">I</i>'],
+  ['ul', 'Bulleted list', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>'],
+  ['ol', 'Numbered list', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4.5h1.5V9M3.5 9h3M3.5 14.5a1.5 1.5 0 0 1 3 .3c0 1-3 2.2-3 3.7h3" stroke-width="1.6"/></svg>'],
+  ['link', 'Link', ICON.link], ['clear', 'Clear formatting', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 5h12M12 5l-4 14M4 20l16-16"/></svg>']];
+function richEditor(html, id) {
+  return `<div class="rte"><div class="rte-bar" role="toolbar" aria-label="Formatting" aria-controls="${id}">${RTE_TOOLS.map(([k, l, ic], i) => `${i === 3 || i === 5 ? '<span class="rte-sep"></span>' : ''}<button type="button" class="rte-b" data-rte="${k}" aria-label="${l}" title="${l}" aria-pressed="false">${ic}</button>`).join('')}</div>
+    <div class="rte-link" hidden><input class="input" type="url" placeholder="https://…" aria-label="Link address"><button type="button" class="btn red xs" data-rte-ok>Add link</button><button type="button" class="btn ghost xs" data-rte-x>Remove link</button></div>
+    <div class="rte-area reading" id="${id}" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="sblab">${html || '<p><br></p>'}</div></div>`;
+}
+function bindRichEditor(wrap) {
+  const area = $('.rte-area', wrap), lk = $('.rte-link', wrap); let saved = null;
+  const exec = (c, v = null) => { area.focus(); document.execCommand(c, false, v); state(); };
+  const block = () => { const sel = getSelection(); let n = sel.anchorNode; while (n && n !== area) { if (n.nodeType === 1 && /^(H3|P|LI)$/.test(n.tagName)) return n; n = n.parentNode; } return null; };
+  const state = () => { const b = block(); const on = { bold: document.queryCommandState('bold'), italic: document.queryCommandState('italic'), ul: document.queryCommandState('insertUnorderedList'), ol: document.queryCommandState('insertOrderedList'), h: b?.tagName === 'H3', link: !!getSelection().anchorNode?.parentElement?.closest('a') };
+    $$('[data-rte]', wrap).forEach(x => x.setAttribute('aria-pressed', !!on[x.dataset.rte])); };
+  document.execCommand('defaultParagraphSeparator', false, 'p');
+  $$('[data-rte]', wrap).forEach(b => { b.onmousedown = e => e.preventDefault(); b.onclick = () => { const k = b.dataset.rte;
+    if (k === 'bold') exec('bold'); else if (k === 'italic') exec('italic'); else if (k === 'ul') exec('insertUnorderedList'); else if (k === 'ol') exec('insertOrderedList');
+    else if (k === 'h') exec('formatBlock', block()?.tagName === 'H3' ? 'P' : 'H3');
+    else if (k === 'clear') { exec('removeFormat'); if (block()?.tagName === 'H3') exec('formatBlock', 'P'); }
+    else if (k === 'link') { const sel = getSelection(); if (!sel.rangeCount || !area.contains(sel.anchorNode)) { area.focus(); return; } saved = sel.getRangeAt(0).cloneRange(); const a = sel.anchorNode.parentElement?.closest('a');
+      lk.hidden = false; const inp = $('input', lk); inp.value = a?.getAttribute('href') || ''; inp.focus(); } }; });
+  const restore = () => { area.focus(); if (saved) { const sel = getSelection(); sel.removeAllRanges(); sel.addRange(saved); } };
+  $('[data-rte-ok]', lk).onclick = () => { let u = $('input', lk).value.trim(); if (!u) return; if (!/^(https?:|mailto:)/i.test(u)) u = 'https://' + u; restore();
+    if (getSelection().isCollapsed) document.execCommand('insertHTML', false, `<a href="${esc(u)}">${esc(u)}</a>`); else document.execCommand('createLink', false, u); lk.hidden = true; state(); };
+  $('[data-rte-x]', lk).onclick = () => { restore(); document.execCommand('unlink'); lk.hidden = true; state(); };
+  $('input', lk).onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-rte-ok]', lk).click(); } if (e.key === 'Escape') { e.stopPropagation(); lk.hidden = true; area.focus(); } };
+  area.addEventListener('paste', e => { e.preventDefault(); const d = e.clipboardData; const h = d.getData('text/html');
+    const html = h ? sanitizeHTML(h) : d.getData('text/plain').split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
+    document.execCommand('insertHTML', false, html); });
+  area.addEventListener('keyup', state); area.addEventListener('mouseup', state); area.addEventListener('focus', state);
 }
 
 /* ---------- background jobs (demo: run while the app is open) ---------- */

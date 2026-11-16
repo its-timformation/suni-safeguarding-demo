@@ -465,7 +465,7 @@ function topbar(right = '', home = '#/') {
   let back = ''; right = right.replace(/<a class="btn ghost sm[^"]*" href="[^"]*" data-back="[^"]*">[\s\S]*?<\/a>/, m => { back = m; return ''; });
   const menu = (right.match(/class="btn /g) || []).length > 2 || right.includes('tb-nav');
   return `<div class="topbar ${menu ? 'hasmenu' : ''}"><div class="in">
-    <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30).replace('alt="" aria-hidden="true"', 'alt="Scripture Union NI Safeguarding Training — home"')}</span><span class="brand-div"></span><span class="brand-lbl"><small>Safeguarding</small> <b>Training</b></span></a>
+    <a class="brand" href="${home}"><span class="brand-full">${LOGO(40)}</span><span class="brand-flame">${FLAME(30).replace('alt="" aria-hidden="true"', 'alt="Scripture Union NI"')}</span><span class="brand-div"></span><span class="brand-lbl"><small class="brand-org">Scripture Union NI</small><b>Safeguarding Training</b></span></a>
     <div class="spacer"></div>${back ? `<span class="tb-back">${back}</span>` : ''}<div class="tb-acts">${right}</div>${menu ? `<button class="iconbtn tb-more" data-act="tbmenu" aria-label="Menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>` : ''}</div></div>`;
 }
 function demobar(active) {
@@ -815,7 +815,7 @@ function renderPlayer(person, pathway, stepParam) {
   app().innerHTML = topbar(`<a class="btn ghost sm" href="#/me">${ICON.back} My training</a><button class="btn ghost sm" data-act="logout">Log out</button>`, '#/me') + previewBanner() +
     `<main class="wrap fadein"><div class="player">
     <aside id="paside">
-      <div class="eyebrow">Pathway · ${vTag(pathway)}</div>
+      <div class="eyebrow">Safeguarding training</div>
       <h2 class="ptitle">${esc(pathway.title)}</h2>
       <button class="stepmini" data-act="steps" aria-expanded="false" aria-controls="steplist">
         <span class="sm-dots">${steps.map((s, i) => `<i class="${s.type !== 'attest' && stepDone(pr, s) ? 'd' : ''} ${i === idx ? 'c' : ''}"></i>`).join('')}</span>
@@ -1024,6 +1024,32 @@ function loadScript(src, ready, cbName) {
 }
 
 /* read & acknowledge */
+/* ---------- rich text: allow-listed HTML only (headings, paragraphs, lists, bold, italic, links) ---------- */
+function sanitizeHTML(html) {
+  const t = document.createElement('template'); t.innerHTML = String(html || '');
+  const MAP = { H1: 'h3', H2: 'h3', H3: 'h3', H4: 'h3', H5: 'h3', H6: 'h3', P: 'p', DIV: 'p', UL: 'ul', OL: 'ol', LI: 'li', STRONG: 'strong', B: 'strong', EM: 'em', I: 'em', A: 'a', BR: 'br' };
+  const walk = (node, out) => node.childNodes.forEach(n => {
+    if (n.nodeType === 3) { out.appendChild(document.createTextNode(n.textContent)); return; }
+    if (n.nodeType !== 1 || ['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'TEMPLATE', 'META', 'LINK'].includes(n.tagName)) return;
+    const tag = MAP[n.tagName];
+    if (!tag) { walk(n, out); return; }   // unknown tag: keep its text, drop the wrapper
+    // inline styles from Word/Docs: treat font-weight bold / italic spans as such
+    // headings/paragraphs can't hold blocks, and lists can't sit inside list items' text runs: unwrap them
+    if (['p', 'h3', 'strong', 'em', 'a'].includes(tag) && n.querySelector('p,div,ul,ol,li,h1,h2,h3,h4,h5,h6')) { walk(n, out); return; }
+    if (tag === 'li' && !['UL', 'OL'].includes(n.parentElement?.tagName)) { const p = document.createElement('p'); walk(n, p); if (p.textContent.trim()) out.appendChild(p); return; }
+    const el = document.createElement(tag);
+    if (tag === 'a') { const h = n.getAttribute('href') || ''; if (!/^(https?:|mailto:)/i.test(h)) { walk(n, out); return; } el.href = h; el.target = '_blank'; el.rel = 'noopener'; }
+    walk(n, el);
+    if (['p', 'h3', 'li', 'strong', 'em'].includes(tag) && !el.textContent.trim() && !el.querySelector('br')) return;
+    out.appendChild(el);
+  });
+  const box = document.createElement('div'); walk(t.content, box);
+  // wrap stray text at the top level in paragraphs
+  [...box.childNodes].forEach(n => { if (n.nodeType === 3 && n.textContent.trim() || n.nodeType === 1 && ['STRONG', 'EM', 'A'].includes(n.tagName)) { const p = document.createElement('p'); n.replaceWith(p); p.appendChild(n); } else if (n.nodeType === 3) n.remove(); });
+  return box.innerHTML;
+}
+const richBody = step => step.format === 'html' ? sanitizeHTML(step.body) : md(step.body);
+const plainText = step => (step.format === 'html' ? (() => { const d = document.createElement('div'); d.innerHTML = step.body || ''; return d.textContent; })() : step.body || '');
 function md(src) {
   const lines = String(src || '').split('\n'); let out = '', inList = false;
   const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\[(.+?)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
@@ -1037,7 +1063,7 @@ function md(src) {
 }
 function stageRead(stage, { person, pathway, pr, step, next }) {
   const done = stepDone(pr, step);
-  stage.innerHTML = stepHead('Read & acknowledge', step.title) + `<div class="reading" id="rd">${md(step.body)}</div>
+  stage.innerHTML = stepHead('Read & acknowledge', step.title) + `<div class="reading" id="rd">${richBody(step)}</div>
     ${step.link?.url ? `<p><a href="${esc(step.link.url)}" target="_blank" rel="noopener" class="btn ghost sm">${ICON.link} ${esc(step.link.label || 'Open document')}</a></p>` : ''}
     <div class="card" style="background:#FBFAF8;box-shadow:none;margin-top:22px">
       <label class="row" style="gap:12px;cursor:pointer;align-items:flex-start"><input type="checkbox" id="ack" ${done ? 'checked disabled' : ''} style="width:22px;height:22px;accent-color:var(--red-600);margin-top:2px"><span style="font-weight:600">${esc(step.ackText || 'I have read and understood this.')}</span></label>
@@ -1240,7 +1266,7 @@ const unb64u = str => decodeURIComponent(escape(atob(str.replace(/-/g, '+').repl
 const SIGN_SALT = 'suni-sg-demo-2026';
 function certPayload(c) {
   const person = Person(c.personId);
-  const body = b64u(JSON.stringify({ n: c.nameOnCert || person?.name || c.attestationName, t: c.pathwayTitle, v: c.version, c: c.completedAt.slice(0, 10), e: c.expiresAt.slice(0, 10), s: c.score }));
+  const body = b64u(JSON.stringify({ n: c.nameOnCert || person?.name || c.attestationName, t: c.pathwayTitle, v: verLabel(P(c.pathwayId), c.version), c: c.completedAt.slice(0, 10), e: c.expiresAt.slice(0, 10), s: c.score }));
   return body + '.' + hash(c.id + body + SIGN_SALT);
 }
 const publicBase = () => (db.settings.publicUrl || '').trim().replace(/#.*$/, '') || (/^https?:/.test(location.protocol) ? location.href.split('#')[0] : '');
@@ -1264,7 +1290,6 @@ function renderCert(certId, viewer) {
         <div><b>Completed</b>${fmtDate(c.completedAt)}</div>
         <div><b>Valid until</b>${fmtDate(c.expiresAt)}</div>
         <div><b>Certificate ID</b>${esc(c.id)}</div>
-        <div><b>Course version</b>${vTag(P(c.pathwayId), c.version)}</div>
         <div><b>${c.manual ? 'Recorded' : 'Signed as'}</b>${esc(c.manual ? c.manual.method.split(' (')[0] : c.attestationName)}</div>
         <div class="cert-tag">Light to live by</div>
       </div>
@@ -1311,7 +1336,7 @@ function verifyCard(certId, payload) {
   const row = (k, v) => `<div class="vrow"><span>${k}</span><b>${v}</b></div>`;
   return `<div class="vcard">
     <div class="vtop" style="--tone:${S[0]}"><div class="vbadge">${ico}</div><div class="vk">Safeguarding certificate check</div><h1>${S[1]}</h1><p>${S[2]}</p></div>
-    ${data ? `<div class="vbody">${row('Name', esc(data.n))}${row('Training', `${esc(data.t)} <span class="muted" style="font-weight:600">v${data.v}</span>`)}${row('Completed', fmtDate(data.c) + (data.m ? ' <span class="muted" style="font-weight:600">(recorded by SUNI)</span>' : ''))}${row(state === 'valid' ? 'Valid until' : 'Expiry date', `<span style="color:${S[0]}">${fmtDate(data.e)}</span>`)}${data.s != null ? row('Quiz score', data.s + '%') : ''}${row('Certificate ID', `<span class="mono">${esc(certId)}</span>`)}
+    ${data ? `<div class="vbody">${row('Name', esc(data.n))}${row('Training', esc(data.t))}${row('Course version', 'v' + esc(typeof data.v === 'number' ? data.v + '.0' : data.v))}${row('Completed', fmtDate(data.c) + (data.m ? ' <span class="muted" style="font-weight:600">(recorded by SUNI)</span>' : ''))}${row(state === 'valid' ? 'Valid until' : 'Expiry date', `<span style="color:${S[0]}">${fmtDate(data.e)}</span>`)}${data.s != null ? row('Quiz score', data.s + '%') : ''}${row('Certificate ID', `<span class="mono">${esc(certId)}</span>`)}
       <div class="vchecked">${ICON.check.replace('<svg', '<svg width="13" height="13"')} Checked ${fmtDT(now())}</div></div>` : ''}
     <div class="vinfo">
       <details><summary>What does this certificate mean?</summary><p>The person named has watched SUNI’s safeguarding training, passed a short quiz and signed to say they’ll follow our safeguarding policy. It is <b>not</b> a criminal record check — AccessNI checks are handled separately.</p></details>
@@ -1322,12 +1347,12 @@ function verifyCard(certId, payload) {
 }
 function renderVerify(certId, payload) {
   if (!certId) {
-    app().innerHTML = `<div class="vpage"><header class="vhead">${LOGO(40)}</header><main class="vmain fadein"><div class="vcard"><div class="vtop" style="--tone:var(--red)"><div class="vbadge">${ICON.attest.replace('<svg', '<svg width="40" height="40"')}</div><div class="vk">Safeguarding certificate check</div><h1>Check a certificate</h1><p>Scan the QR code on a SUNI safeguarding certificate, or type its ID below.</p></div>
+    app().innerHTML = `<div class="vpage"><header class="vhead"><span class="brand">${LOGO(40)}<span class="brand-div"></span><span class="brand-lbl"><b>Safeguarding Training</b><small>Certificate check</small></span></span></header><main class="vmain fadein"><div class="vcard"><div class="vtop" style="--tone:var(--red)"><div class="vbadge">${ICON.attest.replace('<svg', '<svg width="40" height="40"')}</div><div class="vk">Safeguarding certificate check</div><h1>Check a certificate</h1><p>Scan the QR code on a SUNI safeguarding certificate, or type its ID below.</p></div>
       <div class="vbody"><form id="vf2" class="vform"><input class="input" id="vid" placeholder="SUNI-SG-2026-XXXXXX" autocomplete="off" style="text-transform:uppercase;font-size:17px;font-weight:700;letter-spacing:.03em"><button class="btn red">Check</button></form><div class="help">You’ll find the ID at the bottom of the certificate.</div></div></div></main></div>`;
     $('#vf2').onsubmit = e => { e.preventDefault(); const v = $('#vid').value.trim().toUpperCase(); if (v) go('#/verify/' + v); };
     return;
   }
-  app().innerHTML = `<div class="vpage"><header class="vhead">${LOGO(40)}</header><main class="vmain fadein">${verifyCard(certId, payload)}</main><footer class="vpfoot">Scripture Union Northern Ireland · Charity NIC104852 · Light to live by</footer></div>`;
+  app().innerHTML = `<div class="vpage"><header class="vhead"><span class="brand">${LOGO(40)}<span class="brand-div"></span><span class="brand-lbl"><b>Safeguarding Training</b><small>Certificate check</small></span></span></header><main class="vmain fadein">${verifyCard(certId, payload)}</main><footer class="vpfoot">Scripture Union Northern Ireland · Charity NIC104852 · Light to live by</footer></div>`;
 }
 
 /* global delegated actions */

@@ -872,7 +872,7 @@ function renderPathwayEditor(id) {
   const typeName = { video: 'Video', read: 'Read & acknowledge', quiz: 'Quiz' };
   const stepSummary = s => s.type === 'video' ? (s.video?.source === 'file' ? `Uploaded file · ${esc(s.video.fileName || '')}` : `${s.video?.source === 'youtube' ? 'YouTube' : 'Vimeo'} · ${esc(s.video?.url || '')}`)
     : s.type === 'quiz' ? `${s.questions.length} questions in bank · ${s.drawCount} drawn · pass ${s.passMark}% · ${s.lock === false ? 'unlimited attempts' : `locks after ${s.maxAttempts} fails`}${s.questions.length < s.drawCount * 2 ? ' · <span style="color:#8A5508">tip: add more questions so retakes feel fresh</span>' : ''}`
-      : `${(s.body || '').split(/\s+/).length} words${s.link?.url ? ' · links to a document' : ''}`;
+      : `${plainText(s).trim().split(/\s+/).filter(Boolean).length} words${s.link?.url ? ' · links to a document' : ''}`;
   adminShell('pathways', pageHead(`<a href="#/admin/pathways">Pathways</a> / Edit`, esc(draft.title), `Live version: <b>${vTag(live)}</b>${live.version ? ` · published ${fmtDate(live.updatedAt)}` : ' · not published yet'}`,
     `<a class="btn ghost sm" href="#/admin/pathways" id="cancel">Close</a><button class="btn red sm" id="pub" ${changed() ? '' : 'disabled'}>Publish…</button>`) + `
     ${changed() ? `<div class="notice warn small" style="margin-bottom:16px">${ICON.info}<div><b>Unpublished changes.</b> Volunteers see the live version until you publish. Anyone partway through keeps the steps they’ve already done if those steps haven’t changed.</div></div>` : ''}
@@ -1003,9 +1003,10 @@ function stepEditor(step, done, isNew) {
     }
   };
   const drawRead = () => {
-    body.innerHTML = common + `<div class="field"><label class="f">Content</label><textarea class="input" id="sb" style="min-height:240px;font-family:ui-monospace,monospace;font-size:14px">${esc(work.body)}</textarea><div class="help">Use <code>## Heading</code>, <code>- bullet</code> and <code>**bold**</code>.</div></div>
+    body.innerHTML = common + `<div class="field"><label class="f" id="sblab">Content</label>${richEditor(work.format === 'html' ? sanitizeHTML(work.body) : md(work.body), 'sb')}<div class="help">Paste straight from Word or Google Docs — formatting is tidied automatically.</div></div>
       <div class="grid g2"><div class="field"><label class="f">Link label (optional)</label><input class="input" id="sll" value="${esc(work.link?.label || '')}" placeholder="Read the full policy"></div><div class="field"><label class="f">Link URL</label><input class="input" id="slu" value="${esc(work.link?.url || '')}" placeholder="https://…"></div></div>
       <div class="field"><label class="f">Acknowledgement statement</label><input class="input" id="sa" value="${esc(work.ackText || '')}"></div>`;
+    bindRichEditor($('#sb', body).closest('.rte'));
   };
   const drawQuiz = () => {
     body.innerHTML = common + `<div class="grid g3"><div class="field"><label class="f">Questions per attempt</label><input class="input" type="number" min="1" max="20" id="qd" value="${work.drawCount}"></div>
@@ -1054,7 +1055,7 @@ function stepEditor(step, done, isNew) {
   const keep = () => {
     work.title = $('#st', body)?.value ?? work.title;
     if (work.type === 'video') { work.description = $('#sd', body)?.value ?? ''; work.minWatchPct = +($('#mw', body)?.value || 95); if ($('#vurl', body)) work.video.url = $('#vurl', body).value.trim(); }
-    if (work.type === 'read') { work.body = $('#sb', body).value; work.ackText = $('#sa', body).value; const u = $('#slu', body).value.trim(); work.link = u ? { url: u, label: $('#sll', body).value.trim() || 'Open document' } : null; }
+    if (work.type === 'read') { work.body = sanitizeHTML($('#sb', body).innerHTML); work.format = 'html'; work.ackText = $('#sa', body).value; const u = $('#slu', body).value.trim(); work.link = u ? { url: u, label: $('#sll', body).value.trim() || 'Open document' } : null; }
     if (work.type === 'quiz') {
       work.drawCount = +$('#qd', body).value || 5; work.passMark = +$('#qp', body).value || 80; work.maxAttempts = +$('#qa', body).value || 3; work.lock = $('#qlock', body).checked;
       $$('.qedit', body).forEach(el => { const q = work.questions[+el.dataset.qi]; q.text = $('[data-qf=text]', el).value; q.explanation = $('[data-qf=explanation]', el).value; q.options = $$('[data-qo]', el).map(x => x.value); q.correct = +($(`input[type=radio]:checked`, el)?.value || 0); });
@@ -1941,6 +1942,40 @@ function undoSync() {
   db.completions = lastSync.completions;   // brings back anything removed when reactivating
   audit({ actor: 'admin', action: 'list_sync_undone', detail: { at: lastSync.at, ...lastSync.res } });
   lastSync = null; toast('Sync undone — everyone is back as they were'); route();
+}
+
+/* ---------- rich text editor (reading steps) ---------- */
+const RTE_TOOLS = [['h', 'Heading', '<b style="font-size:15px">H</b>'], ['bold', 'Bold', '<b>B</b>'], ['italic', 'Italic', '<i style="font-family:Georgia,serif">I</i>'],
+  ['ul', 'Bulleted list', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>'],
+  ['ol', 'Numbered list', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4.5h1.5V9M3.5 9h3M3.5 14.5a1.5 1.5 0 0 1 3 .3c0 1-3 2.2-3 3.7h3" stroke-width="1.6"/></svg>'],
+  ['link', 'Link', ICON.link], ['clear', 'Clear formatting', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 5h12M12 5l-4 14M4 20l16-16"/></svg>']];
+function richEditor(html, id) {
+  return `<div class="rte"><div class="rte-bar" role="toolbar" aria-label="Formatting" aria-controls="${id}">${RTE_TOOLS.map(([k, l, ic], i) => `${i === 3 || i === 5 ? '<span class="rte-sep"></span>' : ''}<button type="button" class="rte-b" data-rte="${k}" aria-label="${l}" title="${l}" aria-pressed="false">${ic}</button>`).join('')}</div>
+    <div class="rte-link" hidden><input class="input" type="url" placeholder="https://…" aria-label="Link address"><button type="button" class="btn red xs" data-rte-ok>Add link</button><button type="button" class="btn ghost xs" data-rte-x>Remove link</button></div>
+    <div class="rte-area reading" id="${id}" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="sblab">${html || '<p><br></p>'}</div></div>`;
+}
+function bindRichEditor(wrap) {
+  const area = $('.rte-area', wrap), lk = $('.rte-link', wrap); let saved = null;
+  const exec = (c, v = null) => { area.focus(); document.execCommand(c, false, v); state(); };
+  const block = () => { const sel = getSelection(); let n = sel.anchorNode; while (n && n !== area) { if (n.nodeType === 1 && /^(H3|P|LI)$/.test(n.tagName)) return n; n = n.parentNode; } return null; };
+  const state = () => { const b = block(); const on = { bold: document.queryCommandState('bold'), italic: document.queryCommandState('italic'), ul: document.queryCommandState('insertUnorderedList'), ol: document.queryCommandState('insertOrderedList'), h: b?.tagName === 'H3', link: !!getSelection().anchorNode?.parentElement?.closest('a') };
+    $$('[data-rte]', wrap).forEach(x => x.setAttribute('aria-pressed', !!on[x.dataset.rte])); };
+  document.execCommand('defaultParagraphSeparator', false, 'p');
+  $$('[data-rte]', wrap).forEach(b => { b.onmousedown = e => e.preventDefault(); b.onclick = () => { const k = b.dataset.rte;
+    if (k === 'bold') exec('bold'); else if (k === 'italic') exec('italic'); else if (k === 'ul') exec('insertUnorderedList'); else if (k === 'ol') exec('insertOrderedList');
+    else if (k === 'h') exec('formatBlock', block()?.tagName === 'H3' ? 'P' : 'H3');
+    else if (k === 'clear') { exec('removeFormat'); if (block()?.tagName === 'H3') exec('formatBlock', 'P'); }
+    else if (k === 'link') { const sel = getSelection(); if (!sel.rangeCount || !area.contains(sel.anchorNode)) { area.focus(); return; } saved = sel.getRangeAt(0).cloneRange(); const a = sel.anchorNode.parentElement?.closest('a');
+      lk.hidden = false; const inp = $('input', lk); inp.value = a?.getAttribute('href') || ''; inp.focus(); } }; });
+  const restore = () => { area.focus(); if (saved) { const sel = getSelection(); sel.removeAllRanges(); sel.addRange(saved); } };
+  $('[data-rte-ok]', lk).onclick = () => { let u = $('input', lk).value.trim(); if (!u) return; if (!/^(https?:|mailto:)/i.test(u)) u = 'https://' + u; restore();
+    if (getSelection().isCollapsed) document.execCommand('insertHTML', false, `<a href="${esc(u)}">${esc(u)}</a>`); else document.execCommand('createLink', false, u); lk.hidden = true; state(); };
+  $('[data-rte-x]', lk).onclick = () => { restore(); document.execCommand('unlink'); lk.hidden = true; state(); };
+  $('input', lk).onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); $('[data-rte-ok]', lk).click(); } if (e.key === 'Escape') { e.stopPropagation(); lk.hidden = true; area.focus(); } };
+  area.addEventListener('paste', e => { e.preventDefault(); const d = e.clipboardData; const h = d.getData('text/html');
+    const html = h ? sanitizeHTML(h) : d.getData('text/plain').split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join('');
+    document.execCommand('insertHTML', false, html); });
+  area.addEventListener('keyup', state); area.addEventListener('mouseup', state); area.addEventListener('focus', state);
 }
 
 /* ---------- background jobs (demo: run while the app is open) ---------- */

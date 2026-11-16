@@ -78,3 +78,9 @@ Versions are shown as **major.minor**: 1.0, 1.1, 1.2, then 2.0. When you publish
 - **Major update** (major, e.g. 2.0): new or changed content; steps added, removed or reordered; a different video.
 
 The editor suggests one based on what changed. Records still keep a running version number underneath for reliable matching (`training_records.details.version`), plus `version_label` for display. Certificates always show the version they were earned on.
+
+## Reading steps
+
+Reading steps use a rich-text editor (headings, bold, italic, bulleted and numbered lists, links). Content pasted from Word or Google Docs is cleaned to that allow-list, so scripts, styles and unsafe links are removed. It's stored as sanitised HTML (`format: 'html'`). Older Markdown content still displays and converts automatically the first time it's edited.
+
+Certificates show the course, person and dates. The course version appears on the scan-to-verify page and in records and exports, not on the certificate itself.
