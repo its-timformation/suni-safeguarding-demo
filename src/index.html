@@ -126,6 +126,8 @@ table.clickable tbody tr:hover .chev{opacity:1;transform:translateX(2px)}
 .drawer-wrap{position:fixed;inset:0;z-index:70}
 .drawer-scrim{position:absolute;inset:0;background:rgba(30,25,35,.35);animation:fade .2s}
 .drawer{position:absolute;right:0;top:0;bottom:0;width:min(640px,100%);background:#fff;box-shadow:-20px 0 60px rgba(0,0,0,.18);display:flex;flex-direction:column;animation:slidein .28s var(--ease)}
+.drawer-wrap.instant .drawer,.drawer-wrap.instant .drawer-scrim{animation:none}
+.dbody>*{animation:dfade .14s ease both}@keyframes dfade{from{opacity:.4}}
 .drawer-wrap.out .drawer{animation:slideout .22s ease forwards}.drawer-wrap.out .drawer-scrim{opacity:0;transition:opacity .2s}
 @keyframes slidein{from{transform:translateX(40px);opacity:0}}@keyframes slideout{to{transform:translateX(40px);opacity:0}}
 .drawer header{display:flex;justify-content:space-between;align-items:center;padding:22px 26px 14px}

@@ -126,6 +126,8 @@ table.clickable tbody tr:hover .chev{opacity:1;transform:translateX(2px)}
 .drawer-wrap{position:fixed;inset:0;z-index:70}
 .drawer-scrim{position:absolute;inset:0;background:rgba(30,25,35,.35);animation:fade .2s}
 .drawer{position:absolute;right:0;top:0;bottom:0;width:min(640px,100%);background:#fff;box-shadow:-20px 0 60px rgba(0,0,0,.18);display:flex;flex-direction:column;animation:slidein .28s var(--ease)}
+.drawer-wrap.instant .drawer,.drawer-wrap.instant .drawer-scrim{animation:none}
+.dbody>*{animation:dfade .14s ease both}@keyframes dfade{from{opacity:.4}}
 .drawer-wrap.out .drawer{animation:slideout .22s ease forwards}.drawer-wrap.out .drawer-scrim{opacity:0;transition:opacity .2s}
 @keyframes slidein{from{transform:translateX(40px);opacity:0}}@keyframes slideout{to{transform:translateX(40px);opacity:0}}
 .drawer header{display:flex;justify-content:space-between;align-items:center;padding:22px 26px 14px}
@@ -4056,8 +4058,8 @@ function personPanel(p, section = 'details') {
   const isNew = !p; const orig = p;
   const w = JSON.parse(JSON.stringify(p || { name: '', email: '', phone: '', org: '', type: 'volunteer', roles: [], eventIds: [], notes: '', accessNI: { status: 'not_requested', date: '' } }));
   w.type = w.type || typeOf(w); w.accessNI = w.accessNI || { status: 'not_requested', date: '' };
-  $('#drawer')?.remove();
-  const d = document.createElement('div'); d.id = 'drawer'; d.className = 'drawer-wrap'; document.body.appendChild(d);
+  const wasOpen = !!$('#drawer'); $('#drawer')?.remove();
+  const d = document.createElement('div'); d.id = 'drawer'; d.className = 'drawer-wrap' + (wasOpen ? ' instant' : ''); document.body.appendChild(d);
   const SECTIONS = [['details', 'Details'], ['serving', 'Roles & events'], ['checks', 'Checks & notes'], ...(isNew ? [] : [['training', 'Training'], ['account', 'Account']])];
   const read = () => {
     const g = id => $('#' + id, d);
@@ -4092,17 +4094,22 @@ function personPanel(p, section = 'details') {
       <div class="dtrain" style="border-color:#F1D3D6"><b>${orig.archived ? 'Restore' : 'Archive'} ${esc(firstName(w.name))}</b><div class="tiny muted" style="margin:3px 0 10px">${orig.archived ? 'Puts them back in lists, events and the dashboard.' : 'For people who’ve stopped serving. They’re removed from lists, events and the dashboard, but their training records and certificates are kept for the retention period.'}</div>
         <button class="btn ${orig.archived ? 'teal' : 'ghost'} xs" id="darch" style="${orig.archived ? '' : 'color:var(--red-600)'}">${orig.archived ? 'Restore' : 'Archive'}</button></div>`,
   };
-  const render = () => {
-    d.innerHTML = `<div class="drawer-scrim"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="${isNew ? 'Add person' : 'Edit ' + esc(w.name)}">
-      <header><div class="person" style="gap:12px">${w.name ? `<span class="avatar" style="width:44px;height:44px;font-size:16px;background:${avatarColour(w.name)}">${initials(w.name)}</span>` : ''}<div><div class="eyebrow">${isNew ? 'New person' : 'Edit person'}</div><h2 style="margin-top:2px">${esc(w.name || 'Add someone')}</h2></div></div><button class="iconbtn" data-dclose>${ICON.x}</button></header>
-      <nav class="dnav">${SECTIONS.map(([k, l]) => `<button class="${section === k ? 'on' : ''}" data-ds="${k}">${l}</button>`).join('')}</nav>
-      <div class="dbody fadein">${body[section]()}</div>
+  const head = () => `<div class="person" style="gap:12px">${w.name ? `<span class="avatar" style="width:44px;height:44px;font-size:16px;background:${avatarColour(w.name)}">${initials(w.name)}</span>` : ''}<div><div class="eyebrow">${isNew ? 'New person' : 'Edit person'}</div><h2 style="margin-top:2px">${esc(w.name || 'Add someone')}</h2></div></div>`;
+  // shell is built once — switching sections only swaps the body, so nothing re-animates
+  d.innerHTML = `<div class="drawer-scrim"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="${isNew ? 'Add person' : 'Edit ' + esc(w.name)}">
+      <header><div id="dhead">${head()}</div><button class="iconbtn" data-dclose>${ICON.x}</button></header>
+      <nav class="dnav">${SECTIONS.map(([k, l]) => `<button data-ds="${k}">${l}</button>`).join('')}</nav>
+      <div class="dbody"></div>
       <footer><button class="btn ghost" data-dclose>Cancel</button><button class="btn red" id="dsave">${isNew ? 'Add person & copy invite link' : 'Save changes'}</button></footer></aside>`;
-    $$('[data-dclose]', d).forEach(b => b.onclick = closeDrawer); $('.drawer-scrim', d).onclick = closeDrawer;
-    $$('[data-ds]', d).forEach(b => b.onclick = () => { read(); section = b.dataset.ds; render(); });
+  $$('[data-dclose]', d).forEach(b => b.onclick = closeDrawer); $('.drawer-scrim', d).onclick = closeDrawer;
+  $$('[data-ds]', d).forEach(b => b.onclick = () => { if (b.dataset.ds === section) return; read(); section = b.dataset.ds; render(); });
+  d.addEventListener('change', e => { if (e.target.name === 'dr' || e.target.name === 'dv') { read(); $('#dprev', d) && ($('#dprev', d).innerHTML = preview()); } });
+  d.addEventListener('input', e => { if (e.target.id === 'dn') { w.name = e.target.value; $('#dhead', d).innerHTML = head(); } });
+  $('#dsave', d).onclick = () => save();
+  const render = () => {
+    $$('[data-ds]', d).forEach(b => { const on = b.dataset.ds === section; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    const bodyEl = $('.dbody', d); bodyEl.innerHTML = body[section](); bodyEl.scrollTop = 0;
     $$('[data-t]', d).forEach(b => b.onclick = () => { w.type = b.dataset.t; $$('[data-t]', d).forEach(x => x.classList.toggle('on', x === b)); });
-    d.addEventListener('change', e => { if (e.target.name === 'dr' || e.target.name === 'dv') { read(); $('#dprev', d) && ($('#dprev', d).innerHTML = preview()); } });
-    $('#dsave', d).onclick = save;
     bindCopy();
     const C = id => db.completions.find(c => c.id === id), pw = id => P(id);
     const after = () => setTimeout(() => { if (Person(orig.id)) personPanel(Person(orig.id), 'training'); }, 50);
