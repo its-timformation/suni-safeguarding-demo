@@ -262,6 +262,17 @@ tbody tr:hover{background:#FCFAF7}
 .switch span::before{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:.2s var(--ease)}
 .switch input:checked+span{background:var(--red)}.switch input:checked+span::before{transform:translateX(18px)}
 .switch input:focus-visible+span{outline:3px solid var(--red-50)}
+.tfacts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0 10px;background:#FBFAF8;border-radius:14px;padding:12px 14px}
+.tfacts span{display:block;font-family:var(--cond);text-transform:uppercase;letter-spacing:.06em;font-size:12px;color:var(--muted);font-weight:600}
+.tfacts b{font-size:15px;white-space:nowrap}
+.tlife{height:5px;border-radius:9px;background:#EFEAE4;overflow:hidden}.tlife i{display:block;height:100%;border-radius:9px}
+.tsteps{margin-top:14px;display:grid;gap:2px}
+.tstep{display:flex;align-items:center;gap:10px;padding:7px 4px;font-size:14.5px}
+.tstep .tk{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 2px var(--line);color:#fff}
+.tstep .tk.on{background:var(--teal);box-shadow:none}.tstep .tk.lk{background:var(--plum);box-shadow:none}
+.tstep .ico{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none}
+.tstep .tt{font-weight:600;flex:1;min-width:0}
+.tstep.todo .tt{color:var(--muted)}
 /* segmented readiness bar */
 .segbar{display:flex;height:12px;border-radius:99px;overflow:hidden;gap:2px;background:#F0EEEB}
 .segbar a{display:block;min-width:4px;transition:filter .15s,transform .15s}
@@ -3134,12 +3145,22 @@ function certNumber(at = now()) {
 const app = () => $('#app');
 let cleanup = [];
 function onLeave(fn) { cleanup.push(fn); }
+/* in-app history: lets Back buttons return to the previous screen (and restore its scroll) */
+const navStack = [], scrollMem = {};
+let navBack = false;
+function replaceHash(h) { route.replacing = true; location.replace(h); }
+function appBack(fallback) { if (navStack.length > 1) history.back(); else go(fallback); }
+addEventListener('hashchange', e => { try { scrollMem[new URL(e.oldURL).hash || '#/'] = scrollY; } catch { } });
 function route() {
   cleanup.forEach(f => { try { f(); } catch { } }); cleanup = [];
   if (!route.keepOverlays) { closeModal(); document.getElementById('drawer')?.remove(); }
+  const cur = location.hash || '#/';
+  navBack = navStack.length > 1 && navStack[navStack.length - 2] === cur;
+  if (route.replacing) { navStack[navStack.length - 1] = cur; route.replacing = false; navBack = false; }
+  else if (navBack) navStack.pop(); else if (navStack[navStack.length - 1] !== cur) navStack.push(cur);
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
-  window.scrollTo({ top: 0 });
+  const restore = navBack ? scrollMem[cur] || 0 : 0; requestAnimationFrame(() => window.scrollTo({ top: restore }));
   if (parts[0] === 'i') return learnerRoute(parts.slice(1));
   if (parts[0] === 'verify') return renderVerify(parts[1], parts[2]);
   if (parts[0] === 'admin') return adminRoute(parts.slice(1));
@@ -3732,7 +3753,7 @@ function renderCert(certId, viewer) {
   const person = c && Person(c.personId);
   const back = viewer ? `#/i/${viewer.token}` : '#/admin';
   if (!c || !person) { app().innerHTML = topbar() + `<main class="wrap"><div class="card empty">Certificate not found.</div></main>`; return; }
-  app().innerHTML = topbar(`<a class="btn ghost sm noprint" href="${back}">${ICON.back} Back</a><button class="btn ghost sm noprint" id="scanprev">📱 Preview scan</button><button class="btn red sm noprint" onclick="print()">${ICON.print} Print / Save PDF</button>`, back) + `<main class="wrap fadein">
+  app().innerHTML = topbar(`<a class="btn ghost sm noprint" href="${back}" data-back="${back}">${ICON.back} Back</a><button class="btn ghost sm noprint" id="scanprev">📱 Preview scan</button><button class="btn red sm noprint" onclick="print()">${ICON.print} Print / Save PDF</button>`, back) + `<main class="wrap fadein">
     ${c.revoked ? `<div class="notice bad noprint" style="max-width:980px;margin:0 auto 14px">${ICON.info}<div><b>${c.revoked.replacedBy ? `Replaced by ${esc(c.revoked.replacedBy)}` : 'This certificate has been revoked'}</b> on ${fmtDate(c.revoked.at)} — “${esc(c.revoked.reason)}”</div></div>` : ''}
     <div class="cert ${c.revoked ? 'cert-void' : ''}">
       <div class="flamebg">${FLAME(300)}</div>
@@ -3804,6 +3825,7 @@ function renderVerify(certId, payload) {
 
 /* global delegated actions */
 document.addEventListener('click', e => {
+  const bk = e.target.closest('[data-back]'); if (bk) { e.preventDefault(); appBack(bk.dataset.back); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act === 'worried') showWorried();
 });
@@ -3824,7 +3846,7 @@ function adminShell(active, inner) {
 function adminRoute(parts) {
   const [sec, id, sub] = parts;
   if (sec === 'people' && id && sub === 'followup') return renderFollowUp(id, parts[3]);
-  if (sec === 'people' && id) { if (lastRecord !== id) { recordTab = 'training'; lastRecord = id; } return renderPersonRecord(id); }
+  if (sec === 'people' && id) { recordTab = ['training', 'attempts', 'certs', 'activity'].includes(sub) ? sub : 'training'; return renderPersonRecord(id); }
   if (sec === 'people') return renderPeople();
   if (sec === 'events') return renderEvents();
   if (sec === 'pathways' && id) return renderPathwayEditor(id);
@@ -4308,7 +4330,7 @@ function renderFollowUp(pid, pwid) {
   const list = Object.values(missed).sort((a, b) => b.n - a.n);
   const bankQ = t => step.questions.find(q => q.text === t);
   adminShell('people', pageHead(`<a href="#/admin/people">People</a> / <a href="#/admin/people/${p.id}">${esc(p.name)}</a> / Follow-up`, `Follow-up: ${esc(firstName(p.name))}’s quiz`,
-    `${esc(pw.title)} · ${esc(step.title)} · locked ${fmtDT(lockedAt)}`, `<a class="btn ghost sm" href="#/admin/people/${p.id}">${ICON.back} Back to record</a>`) + `
+    `${esc(pw.title)} · ${esc(step.title)} · locked ${fmtDT(lockedAt)}`, `<a class="btn ghost sm" href="#/admin/people/${p.id}" data-back="#/admin/people/${p.id}">${ICON.back} Back</a>`) + `
     <div class="fu">
       <div class="fu-main">
         <div class="fu-summary">
@@ -4355,7 +4377,7 @@ function renderFollowUp(pid, pwid) {
 }
 
 /* ---------- person record (tabs) ---------- */
-let recordTab = 'training', lastRecord = null;
+let recordTab = 'training';
 function attemptsFor(p) {
   // every attempt is in the audit log; link each to the certificate it led to (or the current cycle)
   const voided = new Set(); db.pathways.forEach(pw => pw.steps.forEach(st => (db.progress[p.id]?.[pw.id]?.steps[st.id]?.attempts || []).forEach(a => a.voided && voided.add(a.at))));
@@ -4407,12 +4429,18 @@ function renderPersonRecord(id) {
   const body = {
     training: () => `${lockedPws.map(lockCard).join('')}<div class="grid g2" style="align-items:start">${req.map(pw => {
         const st = statusOf(p, pw); const pr = prog(p.id, pw.id);
-        return `<div class="card"><div class="row between"><h3>${esc(pw.title)}</h3>${chip(st)}</div>
-          <div class="small muted" style="margin:4px 0 12px">Current version v${pw.version}${st.c ? ` · last completed v${st.c.version} on ${fmtDate(st.c.completedAt)}, ${new Date(st.c.expiresAt) > new Date() ? 'valid until' : 'expired'} ${fmtDate(st.c.expiresAt)}` : ''}</div>
+        return `<div class="card tcard"><div class="row between"><h3>${esc(pw.title)}</h3>${chip(st)}</div>
+          ${st.c ? (() => { const c = st.c, exp = new Date(c.expiresAt), start = new Date(c.completedAt), never = c.expiresAt.startsWith('9999');
+            const left = never ? 1 : Math.max(0, Math.min(1, (exp - Date.now()) / (exp - start))); const months = Math.round((exp - Date.now()) / (30.44 * DAY));
+            const col = st.key === 'expired' || left <= 0 ? 'var(--red)' : st.key === 'due' ? 'var(--amber)' : 'var(--teal)';
+            return `<div class="tfacts"><div><span>Completed</span><b>${fmtDate(c.completedAt)}</b></div><div><span>${exp > new Date() ? 'Valid until' : 'Expired'}</span><b style="color:${col}">${fmtDate(c.expiresAt)}</b></div><div><span>${c.manual ? 'Recorded' : 'Score'}</span><b>${c.manual ? 'By admin' : c.score != null ? c.score + '%' : '—'}</b></div><div><span>Version</span><b>v${c.version}${c.version < pw.version ? ` <em class="tiny" style="color:#A86A0C;font-style:normal">(now v${pw.version})</em>` : ''}</b></div></div>
+              ${never ? '' : `<div class="tlife"><i style="width:${left * 100}%;background:${col}"></i></div><div class="tiny muted" style="margin-top:4px">${exp > new Date() ? (months >= 1 ? `${months} month${months === 1 ? '' : 's'} left` : `${Math.max(0, Math.ceil((exp - Date.now()) / DAY))} days left`) : `Expired ${Math.round((Date.now() - exp) / (30.44 * DAY))} months ago`}</div>`}`; })() : `<div class="small muted" style="margin:6px 0 4px">Not completed yet · current version v${pw.version}</div>`}
           ${(() => { const renewing = pw.steps.some(s => stepDone(pr, s) || (pr.steps[s.id]?.attempts || []).length); const cyc = st.c && !renewing;
-            return cyc ? pw.steps.map(s => `<div class="row" style="padding:7px 0;gap:10px;border-top:1px solid #F4F0EB"><span class="ico ${s.type}" style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center">${ICON[s.type].replace('<svg', '<svg width="15" height="15"')}</span><span style="flex:1" class="small"><b>${esc(s.title)}</b></span>${st.c.manual ? '<span class="chip st-progress">Recorded by admin</span>' : `<span class="chip st-complete">Done ${fmtDate(st.c.completedAt)}</span>`}</div>`).join('')
-              + `<div class="row" style="padding:7px 0;gap:10px;border-top:1px solid #F4F0EB"><span class="ico attest" style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center">${ICON.attest.replace('<svg', '<svg width="15" height="15"')}</span><span style="flex:1" class="small"><b>Sign-off</b>${st.c.manual ? '' : `<br><span class="tiny muted">Signed as “${esc(st.c.attestationName)}”</span>`}</span><span class="chip st-complete">Done</span></div>`
-              : (st.c ? `<div class="notice info small" style="margin:4px 0 6px">${ICON.info}<div>Renewal in progress — their current certificate stays valid until ${fmtDate(st.c.expiresAt)}.</div></div>` : '') + pw.steps.map(s => { const att = pr.steps[s.id]?.attempts || []; return `<div class="row" style="padding:7px 0;gap:10px;border-top:1px solid #F4F0EB"><span class="ico ${s.type}" style="width:28px;height:28px;border-radius:8px;display:grid;place-items:center">${ICON[s.type].replace('<svg', '<svg width="15" height="15"')}</span><span style="flex:1" class="small"><b>${esc(s.title)}</b>${s.type === 'quiz' && att.length ? `<br><span class="tiny muted">${att.map(a => `<span style="color:${a.passed ? 'var(--teal)' : a.voided ? 'var(--muted)' : 'var(--red)'}">${a.score}%${a.voided ? ' (reset)' : ''}</span>`).join(' · ')}</span>` : ''}</span>${stepDone(pr, s) ? '<span class="chip st-complete">Done</span>' : quizLocked(pr, s) ? '<span class="chip st-locked">Locked</span>' : '<span class="chip st-none">To do</span>'}</div>`; }).join(''); })()}
+            const tick = `<span class="tk on">${ICON.check.replace('<svg', '<svg width="13" height="13"')}</span>`;
+            const stepRow = (s, state, extra = '') => `<div class="tstep ${state}">${state === 'done' ? tick : state === 'locked' ? `<span class="tk lk">${ICON.lock.replace('<svg', '<svg width="12" height="12"')}</span>` : '<span class="tk"></span>'}<span class="ico ${s.type || 'attest'}">${ICON[s.type || 'attest'].replace('<svg', '<svg width="14" height="14"')}</span><span class="tt">${esc(s.title)}${extra}</span></div>`;
+            if (cyc) return `<div class="tsteps">${pw.steps.map(s => stepRow(s, 'done')).join('')}${stepRow({ title: 'Sign-off', type: 'attest' }, 'done', st.c.manual ? ` <span class="tiny muted">· ${esc(st.c.manual.method)}</span>` : ` <span class="tiny muted">· signed as “${esc(st.c.attestationName)}”</span>`)}</div>`;
+            return (st.c ? `<div class="notice info small" style="margin:12px 0 0">${ICON.info}<div>Renewal in progress — current certificate stays valid until ${fmtDate(st.c.expiresAt)}.</div></div>` : '') + `<div class="tsteps">${pw.steps.map(s => { const att = pr.steps[s.id]?.attempts || [];
+              return stepRow(s, stepDone(pr, s) ? 'done' : quizLocked(pr, s) ? 'locked' : 'todo', s.type === 'quiz' && att.length ? ` <span class="tiny">${att.map(a => `<span style="color:${a.passed ? 'var(--teal)' : a.voided ? 'var(--muted)' : 'var(--red)'}">${a.score}%</span>`).join(' · ')}</span>` : ''); }).join('')}${stepRow({ title: 'Sign-off', type: 'attest' }, 'todo')}</div>`; })()}
           <div class="row noprint" style="margin-top:12px;gap:8px;border-top:1px solid #F4F0EB;padding-top:12px">${st.c ? `<a class="btn teal xs" href="#/admin/cert/${st.c.id}">${ICON.attest.replace('<svg', '<svg width="14" height="14"')} View certificate</a>` : ''}<span class="tiny muted" style="flex:1;text-align:right">Admin tools</span>
             <button class="btn ghost xs" data-mc="${pw.id}">Record completion…</button>
             <button class="btn ghost xs" data-rs="${pw.id}" style="color:var(--red-600)">Reset training…</button></div>
@@ -4447,13 +4475,13 @@ function renderPersonRecord(id) {
   };
   adminShell('people', `<div class="printable">` + pageHead(`<a href="#/admin/people">People</a> / Record`, `<span class="person" style="gap:14px">${avatar(p).replace('avatar"', 'avatar" style="width:48px;height:48px;font-size:17px;background:' + avatarColour(p.name) + '"')}${esc(p.name)}</span>`,
     `${esc(p.email)}${p.phone ? ` · ${esc(p.phone)}` : ''}${p.org ? ` · ${esc(p.org)}` : ''} · Added ${fmtDate(p.createdAt)}${p.archived ? ' · <b style="color:var(--red-600)">Archived</b>' : ''}<br><span class="typepill t-${typeOf(p)}">${typeOf(p)}</span>${p.accessNI?.status === 'cleared' ? '<span class="tag" style="background:var(--teal-50);color:var(--teal)">AccessNI cleared</span>' : p.accessNI?.status === 'applied' ? '<span class="tag" style="background:var(--amber-50)">AccessNI pending</span>' : ''}${p.roles.map(r => `<span class="tag">${esc(r)}</span>`).join('')}${p.eventIds.map(id => `<span class="tag" style="background:var(--sky-50)">${esc(EventById(id)?.name || '')}</span>`).join('')}`,
-    `<button class="btn ghost sm" data-copy="${p.token}">${ICON.link} Invite link</button><a class="btn ghost sm" href="#/i/${p.token}">Open as volunteer</a><button class="btn ghost sm" id="prp">${ICON.print} Print record</button><button class="btn red sm" id="pe">Edit</button>`) + `
+    `<a class="btn ghost sm" href="#/admin/people" data-back="#/admin/people">${ICON.back} Back</a><button class="btn ghost sm" data-copy="${p.token}">${ICON.link} Invite link</button><a class="btn ghost sm" href="#/i/${p.token}">Open as volunteer</a><button class="btn ghost sm" id="prp">${ICON.print} Print record</button><button class="btn red sm" id="pe">Edit</button>`) + `
     <div class="tabs noprint" role="tablist">${tabs.map(([k, l, n]) => `<button role="tab" aria-selected="${recordTab === k}" class="${recordTab === k ? 'on' : ''}" data-tab="${k}">${l} <span>${n}</span>${k === 'training' && lockedPws.length ? '<i class="tabdot"></i>' : ''}</button>`).join('')}</div>
     <div id="tabbody" class="fadein">${body[recordTab]()}</div></div>`);
   bindCopy();
   $('#pe').onclick = () => personPanel(p);
   $('#prp').onclick = () => printRecord(p);
-  $$('[data-tab]').forEach(b => b.onclick = () => { recordTab = b.dataset.tab; renderPersonRecord(id); });
+  $$('[data-tab]').forEach(b => b.onclick = () => replaceHash(`#/admin/people/${id}${b.dataset.tab === 'training' ? '' : '/' + b.dataset.tab}`));
   $$('[data-att]').forEach(b => b.onclick = () => openAttempt(atts[+b.dataset.att], p));
   const C = id => db.completions.find(c => c.id === id);
   $$('[data-mc]').forEach(b => b.onclick = () => manualComplete(p, P(b.dataset.mc)));

@@ -327,12 +327,22 @@ function certNumber(at = now()) {
 const app = () => $('#app');
 let cleanup = [];
 function onLeave(fn) { cleanup.push(fn); }
+/* in-app history: lets Back buttons return to the previous screen (and restore its scroll) */
+const navStack = [], scrollMem = {};
+let navBack = false;
+function replaceHash(h) { route.replacing = true; location.replace(h); }
+function appBack(fallback) { if (navStack.length > 1) history.back(); else go(fallback); }
+addEventListener('hashchange', e => { try { scrollMem[new URL(e.oldURL).hash || '#/'] = scrollY; } catch { } });
 function route() {
   cleanup.forEach(f => { try { f(); } catch { } }); cleanup = [];
   if (!route.keepOverlays) { closeModal(); document.getElementById('drawer')?.remove(); }
+  const cur = location.hash || '#/';
+  navBack = navStack.length > 1 && navStack[navStack.length - 2] === cur;
+  if (route.replacing) { navStack[navStack.length - 1] = cur; route.replacing = false; navBack = false; }
+  else if (navBack) navStack.pop(); else if (navStack[navStack.length - 1] !== cur) navStack.push(cur);
   const h = location.hash.replace(/^#\/?/, '');
   const parts = h.split('/').filter(Boolean);
-  window.scrollTo({ top: 0 });
+  const restore = navBack ? scrollMem[cur] || 0 : 0; requestAnimationFrame(() => window.scrollTo({ top: restore }));
   if (parts[0] === 'i') return learnerRoute(parts.slice(1));
   if (parts[0] === 'verify') return renderVerify(parts[1], parts[2]);
   if (parts[0] === 'admin') return adminRoute(parts.slice(1));
@@ -925,7 +935,7 @@ function renderCert(certId, viewer) {
   const person = c && Person(c.personId);
   const back = viewer ? `#/i/${viewer.token}` : '#/admin';
   if (!c || !person) { app().innerHTML = topbar() + `<main class="wrap"><div class="card empty">Certificate not found.</div></main>`; return; }
-  app().innerHTML = topbar(`<a class="btn ghost sm noprint" href="${back}">${ICON.back} Back</a><button class="btn ghost sm noprint" id="scanprev">📱 Preview scan</button><button class="btn red sm noprint" onclick="print()">${ICON.print} Print / Save PDF</button>`, back) + `<main class="wrap fadein">
+  app().innerHTML = topbar(`<a class="btn ghost sm noprint" href="${back}" data-back="${back}">${ICON.back} Back</a><button class="btn ghost sm noprint" id="scanprev">📱 Preview scan</button><button class="btn red sm noprint" onclick="print()">${ICON.print} Print / Save PDF</button>`, back) + `<main class="wrap fadein">
     ${c.revoked ? `<div class="notice bad noprint" style="max-width:980px;margin:0 auto 14px">${ICON.info}<div><b>${c.revoked.replacedBy ? `Replaced by ${esc(c.revoked.replacedBy)}` : 'This certificate has been revoked'}</b> on ${fmtDate(c.revoked.at)} — “${esc(c.revoked.reason)}”</div></div>` : ''}
     <div class="cert ${c.revoked ? 'cert-void' : ''}">
       <div class="flamebg">${FLAME(300)}</div>
@@ -997,6 +1007,7 @@ function renderVerify(certId, payload) {
 
 /* global delegated actions */
 document.addEventListener('click', e => {
+  const bk = e.target.closest('[data-back]'); if (bk) { e.preventDefault(); appBack(bk.dataset.back); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act === 'worried') showWorried();
 });
