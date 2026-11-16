@@ -279,6 +279,16 @@ tbody tr:hover{background:#FCFAF7}
 .tstep .ico{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none}
 .tstep .tt{font-weight:600;flex:1;min-width:0}
 .tstep.todo .tt{color:var(--muted)}
+.evcard{cursor:pointer;transition:transform .2s var(--ease),box-shadow .2s}.evcard:hover{transform:translateY(-2px);box-shadow:var(--sh-2)}
+.evtop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}@media(max-width:1000px){.evtop{grid-template-columns:1fr}}
+.evnums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.evnum{border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:12px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:.15s}
+.evnum b{font-size:34px;letter-spacing:-.02em;line-height:1;color:var(--c)}.evnum span{font-weight:600;font-size:13.5px;color:var(--muted)}
+.evnum:hover{border-color:var(--c)}.evnum.on{border-color:var(--c);box-shadow:inset 0 0 0 1px var(--c);background:color-mix(in srgb,var(--c) 6%,#fff)}
+.evpw{padding:12px 0;border-top:1px solid #F1EDE8}.evpw:first-of-type{border-top:0;padding-top:0}
+.addlist{max-height:52vh;overflow:auto;display:grid;gap:6px}
+.addrow{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+.addrow input{accent-color:var(--red);width:18px;height:18px}.addrow:has(input:checked){border-color:var(--red);background:var(--red-50)}
 /* segmented readiness bar */
 .segbar{display:flex;height:12px;border-radius:99px;overflow:hidden;gap:2px;background:#F0EEEB}
 .segbar a{display:block;min-width:4px;transition:filter .15s,transform .15s}
@@ -3854,6 +3864,7 @@ function adminRoute(parts) {
   if (sec === 'people' && id && sub === 'followup') return renderFollowUp(id, parts[3]);
   if (sec === 'people' && id) { recordTab = ['training', 'attempts', 'certs', 'activity'].includes(sub) ? sub : 'training'; return renderPersonRecord(id); }
   if (sec === 'people') return renderPeople();
+  if (sec === 'events' && id) return renderEventDetail(id);
   if (sec === 'events') return renderEvents();
   if (sec === 'pathways' && id) return renderPathwayEditor(id);
   if (sec === 'pathways') return renderPathways();
@@ -3912,7 +3923,7 @@ function renderOverview() {
     <div class="grid g2" style="margin-top:22px;align-items:start">
       <div class="card"><div class="row between" style="margin-bottom:6px"><h3>Event readiness</h3><a class="small" href="#/admin/events">All events</a></div>
         ${upcoming.length ? upcoming.map(ev => { const c = readyCounts(ev);
-          return `<div style="padding:12px 0;border-bottom:1px solid #F1EDE8"><div class="row between"><b>${esc(ev.name)}</b><span class="small"><b>${c.total ? Math.round(c.ready / c.total * 100) : 0}%</b> <span class="muted">ready</span></span></div>
+          return `<div style="padding:12px 0;border-bottom:1px solid #F1EDE8"><div class="row between"><a href="#/admin/events/${ev.id}" style="color:inherit;font-weight:700">${esc(ev.name)}</a><span class="small"><b>${c.total ? Math.round(c.ready / c.total * 100) : 0}%</b> <span class="muted">ready</span></span></div>
             <div class="tiny muted" style="margin:2px 0 8px">${fmtDate(ev.date)} · ${esc(ev.location || '')} · ${plural(c.total, 'volunteer')}</div>${readyBar(c, ev.id)}${readyLegend(c, ev.id)}</div>`; }).join('') : '<div class="empty">No upcoming events</div>'}
       </div>
       <div class="card"><div class="row between" style="margin-bottom:6px"><h3>Recent activity</h3><a class="small" href="#/admin/audit">Audit log</a></div>${activityList(db.audit.slice(-10).reverse())}</div>
@@ -4510,6 +4521,71 @@ function renderPersonRecord(id) {
 }
 function addWorkingDays(d, n) { const x = new Date(d); while (n > 0) { x.setDate(x.getDate() + 1); if (x.getDay() % 6) n--; } return x.toISOString(); }
 
+/* ---------- event detail page ---------- */
+let evFilter = { ready: '', q: '' };
+function renderEventDetail(id) {
+  const ev = EventById(id); if (!ev) return go('#/admin/events');
+  const team = live().filter(p => p.eventIds.includes(ev.id)).sort((a, b) => a.name.localeCompare(b.name));
+  const c = readyCounts(ev); const days = Math.ceil((new Date(ev.date) - Date.now()) / DAY); const endDays = Math.ceil((new Date(ev.endDate || ev.date) - Date.now()) / DAY);
+  const when = days > 0 ? `Starts in ${days} day${days === 1 ? '' : 's'}` : endDays >= 0 ? 'Happening now' : 'Finished';
+  const L = { ready: 'Ready', renew: 'Needs refresher', todo: 'Not trained' }, K = { ready: 'complete', renew: 'due', todo: 'expired' };
+  const pws = ev.requiredPathways.map(P).filter(Boolean);
+  const ST = [['complete', 'Complete', 'var(--teal)'], ['due', 'Due soon', 'var(--amber)'], ['progress', 'In progress', 'var(--sky)'], ['none', 'Not started', '#CFC8C0'], ['expired', 'Expired', 'var(--red)'], ['locked', 'Needs review', 'var(--plum)']];
+  adminShell('events', pageHead(`<a href="#/admin/events">Events</a> / ${esc(ev.name)}`, esc(ev.name),
+    `${fmtDate(ev.date)}${ev.endDate && ev.endDate !== ev.date ? ' – ' + fmtDate(ev.endDate) : ''} · ${esc(ev.location || '')} · <b>${when}</b>`,
+    `<a class="btn ghost sm" href="#/admin/events" data-back="#/admin/events">${ICON.back} Back</a><button class="btn ghost sm" id="evprint">${ICON.print} Print roster</button><button class="btn ghost sm" id="evedit">Edit event</button><button class="btn red sm" id="evadd">+ Add people</button>`) + `
+    <div class="evtop">
+      <div class="card"><div class="row between" style="margin-bottom:12px"><h3>Team readiness</h3><span class="small"><b style="font-size:22px">${c.total ? Math.round(c.ready / c.total * 100) : 0}%</b> <span class="muted">ready</span></span></div>
+        <div class="evnums">${['ready', 'renew', 'todo'].map(k => `<button class="evnum ${evFilter.ready === k ? 'on' : ''}" data-rf="${k}" style="--c:${k === 'ready' ? 'var(--teal)' : k === 'renew' ? 'var(--amber)' : 'var(--red)'}"><b>${c[k]}</b><span>${L[k]}</span></button>`).join('')}</div>
+        <div style="margin-top:14px">${readyBar(c, ev.id)}</div>
+        <p class="tiny muted" style="margin:10px 0 0">“Ready” = every required certificate is valid until the event ends (${fmtDate(ev.endDate || ev.date)}).</p></div>
+      <div class="card"><h3 style="margin-bottom:12px">Required training</h3>${pws.map(pw => { const cc = Object.fromEntries(ST.map(([k]) => [k, 0])); team.forEach(p => cc[statusOf(p, pw).key]++);
+          return `<div class="evpw"><div class="row between"><a href="#/admin/pathways/${pw.id}" style="color:inherit;font-weight:700">${esc(pw.title)}</a><span class="small muted">${cc.complete + cc.due}/${team.length} done</span></div>
+            <div class="segbar" style="height:9px;margin-top:8px">${ST.map(([k, l, col]) => cc[k] ? `<a href="#/admin/people" data-pf='${JSON.stringify({ event: ev.id, pathway: pw.id, status: k })}' style="flex:${cc[k]};background:${col}" title="${cc[k]} ${l}"></a>` : '').join('')}</div>
+            <div class="tiny muted" style="margin-top:6px">${ST.filter(([k]) => cc[k]).map(([k, l]) => `${l} ${cc[k]}`).join(' · ')}</div></div>`; }).join('') || '<div class="empty">No training required — edit the event to add some.</div>'}</div>
+    </div>
+    <div class="row between" style="margin:26px 0 12px"><h2>Team <span class="muted" style="font-weight:600;font-size:18px">(${team.length})</span></h2>
+      <div class="row"><input class="input" id="evq" placeholder="Search team…" value="${esc(evFilter.q)}" style="width:220px;padding:9px 14px"><button class="btn ghost sm" id="evmail">Copy emails of people not ready</button></div></div>
+    <div class="tabs" style="margin-bottom:14px">${[['', 'Everyone', team.length], ['ready', 'Ready', c.ready], ['renew', 'Needs refresher', c.renew], ['todo', 'Not trained', c.todo]].map(([k, l, n]) => `<button class="${evFilter.ready === k ? 'on' : ''}" data-rf="${k}">${l} <span>${n}</span></button>`).join('')}</div>
+    <div id="evlist"></div>`);
+  const draw = () => {
+    const list = team.filter(p => (!evFilter.ready || eventState(p, ev) === evFilter.ready) && (!evFilter.q || (p.name + ' ' + p.email).toLowerCase().includes(evFilter.q.toLowerCase())));
+    $('#evlist').innerHTML = `<div class="tablewrap"><table class="clickable"><thead><tr><th>Name</th><th>Role</th><th>Readiness</th>${pws.map(pw => `<th>${esc(pw.title)}</th>`).join('')}<th></th></tr></thead><tbody>
+      ${list.map(p => { const s = eventState(p, ev);
+        return `<tr data-row="${p.id}" tabindex="0"><td><span class="person">${avatar(p)}<span><b>${esc(p.name)}</b><br><span class="tiny muted">${esc(p.email)}</span></span></span></td><td>${p.roles.map(r => `<span class="tag">${esc(r)}</span>`).join('')}</td>
+          <td><span class="chip st-${K[s]}"><span class="dot"></span>${L[s]}</span></td>
+          ${pws.map(pw => { const lc = latestCompletion(p.id, pw.id), st = statusOf(p, pw); const ok = lc && new Date(lc.expiresAt) > new Date(ev.endDate || ev.date);
+            return `<td>${lc && new Date(lc.expiresAt) > new Date() ? `<span class="small" style="font-weight:700;color:${ok ? 'var(--teal)' : '#A86A0C'}">${ok ? '✓' : '!'} until ${fmtDate(lc.expiresAt)}</span>` : chip(st)}</td>`; }).join('')}
+          <td class="rowacts"><button class="btn ghost xs" data-copy="${p.token}" title="Copy invite link">${ICON.link}</button><button class="btn ghost xs" data-rm="${p.id}" title="Remove from this event">${ICON.x.replace('width="18" height="18"', 'width="14" height="14"')}</button><span class="chev">${ICON.arrow.replace('width="18" height="18"', 'width="16" height="16"')}</span></td></tr>`; }).join('') || `<tr><td colspan="${4 + pws.length}" class="empty">${team.length ? 'No one matches' : 'No one is signed up yet — use “Add people”.'}</td></tr>`}
+      </tbody></table></div>`;
+    bindCopy();
+    $$('#evlist [data-row]').forEach(tr => { const open = e => { if (e.target.closest('button,a')) return; go('#/admin/people/' + tr.dataset.row); }; tr.onclick = open; tr.onkeydown = e => e.key === 'Enter' && open(e); });
+    $$('[data-rm]').forEach(b => b.onclick = e => { e.stopPropagation(); const p = Person(b.dataset.rm); if (!confirmInline(b, 'Remove?')) return;
+      p.eventIds = p.eventIds.filter(x => x !== ev.id); audit({ actor: 'admin', action: 'person_updated', personId: p.id, detail: { name: p.name, changes: [`removed from ${ev.name}`] } }); toast(`${p.name} removed from ${ev.name}`); renderEventDetail(id); });
+  };
+  draw(); bindPf();
+  $$('[data-rf]').forEach(b => b.onclick = () => { evFilter.ready = evFilter.ready === b.dataset.rf && b.classList.contains('evnum') ? '' : b.dataset.rf; renderEventDetail(id); });
+  $('#evq').oninput = e => { evFilter.q = e.target.value; draw(); };
+  $('#evprint').onclick = () => printRoster(ev);
+  $('#evedit').onclick = () => eventForm(ev);
+  $('#evmail').onclick = async () => { const em = team.filter(p => eventState(p, ev) !== 'ready').map(p => p.email); if (!em.length) { toast('Everyone is ready 🎉'); return; }
+    try { await navigator.clipboard.writeText(em.join('; ')); toast(`${em.length} email addresses copied`); } catch { prompt('Copy these addresses:', em.join('; ')); } };
+  $('#evadd').onclick = () => addToEvent(ev);
+}
+function addToEvent(ev) {
+  const pool = live().filter(p => !p.eventIds.includes(ev.id)).sort((a, b) => a.name.localeCompare(b.name)); const picked = new Set();
+  const s = modal(`<header><div><div class="eyebrow">${esc(ev.name)}</div><h2 style="margin-top:4px">Add people to this event</h2></div><button class="iconbtn" data-close>${ICON.x}</button></header>
+    <div class="body"><input class="input" id="aq" placeholder="Search by name, email or role…" style="margin-bottom:12px"><div class="addlist" id="alist"></div>
+      <p class="tiny muted" style="margin:10px 0 0">They’ll be asked to complete: ${ev.requiredPathways.map(id => esc(P(id)?.title || '')).join(', ') || 'nothing yet'}.</p></div>
+    <footer><span class="small muted" id="acount" style="margin-right:auto;align-self:center">None selected</span><button class="btn ghost" data-close>Cancel</button><button class="btn red" id="ago" disabled>Add to event</button></footer>`, 'wide');
+  const draw = () => { const q = $('#aq', s).value.toLowerCase();
+    $('#alist', s).innerHTML = pool.filter(p => !q || (p.name + ' ' + p.email + ' ' + p.roles.join(' ')).toLowerCase().includes(q)).slice(0, 60).map(p => `<label class="addrow"><input type="checkbox" value="${p.id}" ${picked.has(p.id) ? 'checked' : ''}>${avatar(p)}<span style="flex:1"><b>${esc(p.name)}</b><br><span class="tiny muted">${esc(p.roles.join(', '))}</span></span>${(() => { const s2 = eventState(p, ev); return `<span class="chip st-${s2 === 'ready' ? 'complete' : s2 === 'renew' ? 'due' : 'none'}" style="font-size:12px">${s2 === 'ready' ? 'Already trained' : s2 === 'renew' ? 'Needs refresher' : 'Needs training'}</span>`; })()}</label>`).join('') || '<div class="empty">No one found</div>';
+    $$('#alist input', s).forEach(i => i.onchange = () => { i.checked ? picked.add(i.value) : picked.delete(i.value); $('#acount', s).textContent = picked.size ? `${picked.size} selected` : 'None selected'; $('#ago', s).disabled = !picked.size; }); };
+  draw(); $('#aq', s).oninput = draw;
+  $('#ago', s).onclick = () => { picked.forEach(pid => { const p = Person(pid); p.eventIds.push(ev.id); audit({ actor: 'admin', action: 'person_updated', personId: p.id, detail: { name: p.name, changes: [`added to ${ev.name}`] } }); });
+    toast(`${picked.size} added to ${ev.name}`); closeModal(); renderEventDetail(ev.id); };
+}
+
 /* ---------- events ---------- */
 function renderEvents() {
   const list = [...db.events].sort((a, b) => a.date.localeCompare(b.date));
@@ -4519,7 +4595,7 @@ function renderEvents() {
       const pct = c.total ? c.ready / c.total * 100 : 0;
       const order = { todo: 0, renew: 1, ready: 2 }; const faces = [...ppl].sort((a, b) => order[eventState(a, ev)] - order[eventState(b, ev)]).slice(0, 12);
       const dotCol = { ready: 'var(--teal)', renew: 'var(--amber)', todo: 'var(--red)' }, dotTxt = { ready: 'ready', renew: 'needs a refresher before this event', todo: 'training not complete' };
-      return `<div class="card"><div class="row between"><div><div class="eyebrow">${fmtDate(ev.date)}${ev.endDate && ev.endDate !== ev.date ? ' – ' + fmtDate(ev.endDate) : ''}</div><h3 style="margin-top:4px">${esc(ev.name)}</h3><div class="small muted">${esc(ev.location || '')}</div></div><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn ghost xs" data-roster="${ev.id}" title="Print team roster">${ICON.print}</button><button class="btn ghost xs" data-ev="${ev.id}">Edit</button></div></div>
+      return `<div class="card evcard" data-evopen="${ev.id}" tabindex="0"><div class="row between"><div><div class="eyebrow">${fmtDate(ev.date)}${ev.endDate && ev.endDate !== ev.date ? ' – ' + fmtDate(ev.endDate) : ''}</div><h3 style="margin-top:4px">${esc(ev.name)}</h3><div class="small muted">${esc(ev.location || '')}</div></div><div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn ghost xs" data-roster="${ev.id}" title="Print team roster">${ICON.print}</button><button class="btn ghost xs" data-ev="${ev.id}">Edit</button></div></div>
         <div style="margin:14px 0 8px" class="small"><b>Requires:</b> ${ev.requiredPathways.map(id => `<span class="tag">${esc(P(id)?.title || '?')}</span>`).join('') || '<span class="muted">Nothing yet</span>'}</div>
         <div class="row between small"><span><b>${c.ready}</b> of ${plural(c.total, 'volunteer')} ready</span><span><b>${Math.round(pct)}%</b></span></div>
         <div style="margin:8px 0 0">${readyBar(c, ev.id)}</div>
@@ -4532,6 +4608,7 @@ function renderEvents() {
   $('#adde').onclick = () => eventForm();
   $$('[data-ev]').forEach(b => b.onclick = () => eventForm(EventById(b.dataset.ev)));
   $$('[data-roster]').forEach(b => b.onclick = () => printRoster(EventById(b.dataset.roster)));
+  $$('[data-evopen]').forEach(c => { const open = e => { if (e.target.closest('button,a')) return; evFilter = { ready: '', q: '' }; go('#/admin/events/' + c.dataset.evopen); }; c.onclick = open; c.onkeydown = e => e.key === 'Enter' && open(e); });
 }
 function eventForm(ev) {
   const isNew = !ev; ev = ev || { name: '', date: '', endDate: '', location: '', requiredPathways: ['p-essentials'] };

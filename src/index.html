@@ -279,6 +279,16 @@ tbody tr:hover{background:#FCFAF7}
 .tstep .ico{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:none}
 .tstep .tt{font-weight:600;flex:1;min-width:0}
 .tstep.todo .tt{color:var(--muted)}
+.evcard{cursor:pointer;transition:transform .2s var(--ease),box-shadow .2s}.evcard:hover{transform:translateY(-2px);box-shadow:var(--sh-2)}
+.evtop{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}@media(max-width:1000px){.evtop{grid-template-columns:1fr}}
+.evnums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.evnum{border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:12px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;transition:.15s}
+.evnum b{font-size:34px;letter-spacing:-.02em;line-height:1;color:var(--c)}.evnum span{font-weight:600;font-size:13.5px;color:var(--muted)}
+.evnum:hover{border-color:var(--c)}.evnum.on{border-color:var(--c);box-shadow:inset 0 0 0 1px var(--c);background:color-mix(in srgb,var(--c) 6%,#fff)}
+.evpw{padding:12px 0;border-top:1px solid #F1EDE8}.evpw:first-of-type{border-top:0;padding-top:0}
+.addlist{max-height:52vh;overflow:auto;display:grid;gap:6px}
+.addrow{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+.addrow input{accent-color:var(--red);width:18px;height:18px}.addrow:has(input:checked){border-color:var(--red);background:var(--red-50)}
 /* segmented readiness bar */
 .segbar{display:flex;height:12px;border-radius:99px;overflow:hidden;gap:2px;background:#F0EEEB}
 .segbar a{display:block;min-width:4px;transition:filter .15s,transform .15s}
